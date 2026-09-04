@@ -37,3 +37,20 @@ def test_get_cik_for_ticker_raises_when_not_found(mock_get):
 
     with pytest.raises(ValueError, match="NOPE"):
         get_cik_for_ticker("NOPE", "Test User test@example.com")
+
+
+from agents.sec_edgar import get_submissions
+
+
+@patch("agents.sec_edgar.requests.get")
+def test_get_submissions_builds_padded_cik_url(mock_get):
+    mock_response = Mock()
+    mock_response.json.return_value = {"name": "Snowflake Inc."}
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    result = get_submissions(1640147, "Test User test@example.com")
+
+    assert result == {"name": "Snowflake Inc."}
+    called_url = mock_get.call_args.args[0]
+    assert called_url == "https://data.sec.gov/submissions/CIK0001640147.json"
