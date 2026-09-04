@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 
 @dataclass
@@ -12,10 +12,11 @@ class Config:
     alpha_vantage_key: str
 
 
-def load_config(env_path: str = ".env") -> Config:
-    # Load .env from the specified path in the current working directory.
-    # This allows tests that chdir into a tmp_path to use only their own fixture .env.
-    load_dotenv(dotenv_path=env_path)
+def load_config() -> Config:
+    # find_dotenv(usecwd=True): search for .env starting from the current working
+    # directory, not from this module's file location (the default when no path is
+    # given), so tests that chdir into a tmp_path see only their own fixture .env.
+    load_dotenv(find_dotenv(usecwd=True))
     sec_user_agent = os.environ.get("SEC_USER_AGENT", "").strip()
     api_ninjas_key = os.environ.get("API_NINJAS_KEY", "").strip()
     alpha_vantage_key = os.environ.get("ALPHA_VANTAGE_KEY", "").strip()
