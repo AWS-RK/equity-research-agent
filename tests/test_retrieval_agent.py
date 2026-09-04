@@ -1,4 +1,7 @@
+import json
 from datetime import date
+
+import requests
 
 from agents.retrieval_agent import derive_year_quarter
 
@@ -78,3 +81,36 @@ def test_run_saves_all_documents_and_builds_freshness_report(tmp_path, monkeypat
     for entry in freshness_report:
         assert "is_fresh" in entry
         assert "age_days" in entry
+
+
+def test_run_continues_when_transcript_endpoint_is_gated(tmp_path, monkeypatch):
+    # Discovered live against the real API Ninjas free tier: the earnings
+    # transcript endpoint returns 400 with an error body for accounts without
+    # a paid subscription. A gated/unavailable transcript must not crash the
+    # whole run -- every other independent data source should still complete.
+    monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
+    monkeypatch.setenv("API_NINJAS_KEY", "test-ninjas-key")
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "test-av-key")
+
+    http_error = requests.exceptions.HTTPError("400 Client Error: Bad Request")
+
+    with patch("agents.retrieval_agent.get_cik_for_ticker", return_value=1640147), \
+         patch("agents.retrieval_agent.get_submissions", return_value=FIXTURE_SUBMISSIONS), \
+         patch("agents.retrieval_agent.download_document", return_value="<html>doc</html>"), \
+         patch("agents.retrieval_agent.get_filing_index_html", return_value=FIXTURE_INDEX_HTML), \
+         patch("agents.retrieval_agent.get_transcript", side_effect=http_error), \
+         patch("agents.retrieval_agent.get_earnings", return_value=FIXTURE_EARNINGS) as mock_earnings:
+
+        freshness_report = run("SNOW", base_dir=str(tmp_path), max_age_days=95)
+
+    mock_earnings.assert_called_once_with("SNOW", "test-av-key")
+
+    data_dir = tmp_path / "SNOW"
+    transcript_path = data_dir / "SNOW_transcript_2026Q3.json"
+    assert transcript_path.exists()
+    saved = json.loads(transcript_path.read_text(encoding="utf-8"))
+    assert "error" in saved
+
+    documents_reported = {entry["document"] for entry in freshness_report}
+    assert transcript_path.name not in documents_reported
+    assert "SNOW_earnings_alphavantage.json" in documents_reported

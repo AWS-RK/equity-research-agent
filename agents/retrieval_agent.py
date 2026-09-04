@@ -2,6 +2,8 @@ import argparse
 import json
 from datetime import date, datetime
 
+import requests
+
 from agents.config import load_config, get_data_dir
 from agents.sec_edgar import (
     get_cik_for_ticker,
@@ -60,7 +62,14 @@ def run(ticker: str, base_dir: str = "data", max_age_days: int = 95) -> list[dic
 
     report_date = _parse_date(filing["reportDate"])
     year, quarter = derive_year_quarter(report_date)
-    transcript = get_transcript(ticker, config.api_ninjas_key, year=year, quarter=quarter)
+    try:
+        transcript = get_transcript(ticker, config.api_ninjas_key, year=year, quarter=quarter)
+    except requests.exceptions.HTTPError as exc:
+        # A gated or unavailable transcript is a known, non-fatal outcome (e.g. API
+        # Ninjas' earnings transcript endpoint requires a paid tier). Record the
+        # failure as-is rather than guessing at a transcript, and let every other
+        # independent data source in this run still complete.
+        transcript = {"error": str(exc)}
     transcript_path = data_dir / f"{ticker.upper()}_transcript_{year}Q{quarter}.json"
     transcript_path.write_text(json.dumps(transcript, indent=2), encoding="utf-8")
     transcript_date_str = transcript.get("date")
