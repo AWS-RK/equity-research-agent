@@ -195,3 +195,39 @@ def test_find_exhibit_991_filename_extracts_correct_file():
 def test_find_exhibit_991_filename_returns_none_when_absent():
     html_without_exhibit = "<table><tr><td>8-K</td></tr></table>"
     assert find_exhibit_991_filename(html_without_exhibit) is None
+
+
+from agents.sec_edgar import get_filing_index_html, download_document
+
+
+@patch("agents.sec_edgar.requests.get")
+def test_get_filing_index_html_builds_correct_url(mock_get):
+    mock_response = Mock()
+    mock_response.text = "<html>index</html>"
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    result = get_filing_index_html(1640147, "0001640147-26-000033", "Test User test@example.com")
+
+    assert result == "<html>index</html>"
+    called_url = mock_get.call_args.args[0]
+    assert called_url == (
+        "https://www.sec.gov/Archives/edgar/data/1640147/000164014726000033/"
+        "0001640147-26-000033-index.htm"
+    )
+
+
+@patch("agents.sec_edgar.requests.get")
+def test_download_document_builds_correct_url(mock_get):
+    mock_response = Mock()
+    mock_response.text = "<html>document body</html>"
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    result = download_document(1640147, "0001640147-26-000033", "snow-20260902.htm", "Test User test@example.com")
+
+    assert result == "<html>document body</html>"
+    called_url = mock_get.call_args.args[0]
+    assert called_url == (
+        "https://www.sec.gov/Archives/edgar/data/1640147/000164014726000033/snow-20260902.htm"
+    )

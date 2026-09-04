@@ -85,3 +85,22 @@ def find_exhibit_991_filename(index_html: str) -> str | None:
             if match:
                 return match.group(1).rsplit("/", 1)[-1]
     return None
+
+
+ARCHIVES_BASE_URL = "https://www.sec.gov/Archives/edgar/data"
+
+
+def get_filing_index_html(cik: int, accession_number: str, user_agent: str) -> str:
+    accession_nodash = accession_number.replace("-", "")
+    url = f"{ARCHIVES_BASE_URL}/{cik}/{accession_nodash}/{accession_number}-index.htm"
+    response = requests.get(url, headers=_sec_headers(user_agent), timeout=30)
+    response.raise_for_status()
+    return response.text
+
+
+def download_document(cik: int, accession_number: str, filename: str, user_agent: str) -> str:
+    accession_nodash = accession_number.replace("-", "")
+    url = f"{ARCHIVES_BASE_URL}/{cik}/{accession_nodash}/{filename}"
+    response = requests.get(url, headers=_sec_headers(user_agent), timeout=30)
+    response.raise_for_status()
+    return response.text
