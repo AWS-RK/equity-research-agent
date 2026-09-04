@@ -1,3 +1,5 @@
+import re
+
 import requests
 
 COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -73,3 +75,13 @@ def find_latest_8k_item202(submissions: dict) -> dict | None:
 
     candidates.sort(key=lambda c: c["filingDate"], reverse=True)
     return candidates[0]
+
+
+def find_exhibit_991_filename(index_html: str) -> str | None:
+    rows = re.split(r"<tr", index_html, flags=re.IGNORECASE)
+    for row in rows[1:]:
+        if re.search(r"EX-99\.1", row, flags=re.IGNORECASE):
+            match = re.search(r'href="([^"]+)"', row)
+            if match:
+                return match.group(1).rsplit("/", 1)[-1]
+    return None

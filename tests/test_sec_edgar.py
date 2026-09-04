@@ -147,3 +147,51 @@ def test_find_latest_8k_item202_returns_none_when_absent():
         }
     }
     assert find_latest_8k_item202(fixture_without_8k) is None
+
+
+from agents.sec_edgar import find_exhibit_991_filename
+
+
+INDEX_HTML_FIXTURE = """
+<table class="tableFile" summary="Document Format Files">
+  <tr>
+    <th scope="col">Seq</th>
+    <th scope="col">Description</th>
+    <th scope="col">Document</th>
+    <th scope="col">Type</th>
+    <th scope="col">Size</th>
+  </tr>
+  <tr>
+    <td scope="row">1</td>
+    <td scope="row">8-K</td>
+    <td scope="row"><a href="/ix?doc=/Archives/edgar/data/1640147/000164014726000033/snow-20260902.htm">snow-20260902.htm</a></td>
+    <td scope="row">8-K</td>
+    <td scope="row">29666</td>
+  </tr>
+  <tr class="evenRow">
+    <td scope="row">2</td>
+    <td scope="row">EX-99.1</td>
+    <td scope="row"><a href="/Archives/edgar/data/1640147/000164014726000033/fy2027q2earnings.htm">fy2027q2earnings.htm</a></td>
+    <td scope="row">EX-99.1</td>
+    <td scope="row">613720</td>
+  </tr>
+  <tr>
+    <td scope="row">6</td>
+    <td scope="row"></td>
+    <td scope="row"><a href="/Archives/edgar/data/1640147/000164014726000033/imagea.jpg">imagea.jpg</a></td>
+    <td scope="row">GRAPHIC</td>
+    <td scope="row">3840</td>
+  </tr>
+</table>
+"""
+
+
+def test_find_exhibit_991_filename_extracts_correct_file():
+    result = find_exhibit_991_filename(INDEX_HTML_FIXTURE)
+
+    assert result == "fy2027q2earnings.htm"
+
+
+def test_find_exhibit_991_filename_returns_none_when_absent():
+    html_without_exhibit = "<table><tr><td>8-K</td></tr></table>"
+    assert find_exhibit_991_filename(html_without_exhibit) is None
