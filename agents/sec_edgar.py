@@ -50,3 +50,26 @@ def find_latest_10q_or_10k(submissions: dict) -> dict:
 
     candidates.sort(key=lambda c: c["filingDate"], reverse=True)
     return candidates[0]
+
+
+def find_latest_8k_item202(submissions: dict) -> dict | None:
+    recent = submissions["filings"]["recent"]
+    candidates = []
+    for i, form in enumerate(recent["form"]):
+        items = recent["items"][i].split(",") if recent["items"][i] else []
+        if form == "8-K" and "2.02" in items:
+            candidates.append(
+                {
+                    "form": form,
+                    "filingDate": recent["filingDate"][i],
+                    "reportDate": recent["reportDate"][i],
+                    "accessionNumber": recent["accessionNumber"][i],
+                    "primaryDocument": recent["primaryDocument"][i],
+                }
+            )
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
+    return candidates[0]

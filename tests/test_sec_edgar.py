@@ -119,3 +119,31 @@ def test_find_latest_10q_or_10k_raises_when_none_found():
     }
     with pytest.raises(ValueError, match="No 10-Q or 10-K"):
         find_latest_10q_or_10k(empty_fixture)
+
+
+from agents.sec_edgar import find_latest_8k_item202
+
+
+def test_find_latest_8k_item202_picks_matching_filing():
+    result = find_latest_8k_item202(SUBMISSIONS_FIXTURE)
+
+    assert result["form"] == "8-K"
+    assert result["filingDate"] == "2026-09-02"
+    assert result["accessionNumber"] == "0001640147-26-000033"
+    assert result["primaryDocument"] == "snow-20260902.htm"
+
+
+def test_find_latest_8k_item202_returns_none_when_absent():
+    fixture_without_8k = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q"],
+                "filingDate": ["2026-09-04"],
+                "reportDate": ["2026-07-31"],
+                "accessionNumber": ["0001640147-26-000037"],
+                "items": [""],
+                "primaryDocument": ["snow-20260731.htm"],
+            }
+        }
+    }
+    assert find_latest_8k_item202(fixture_without_8k) is None
