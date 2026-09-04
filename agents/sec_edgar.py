@@ -28,3 +28,25 @@ def get_submissions(cik: int, user_agent: str) -> dict:
     response = requests.get(url, headers=_sec_headers(user_agent), timeout=30)
     response.raise_for_status()
     return response.json()
+
+
+def find_latest_10q_or_10k(submissions: dict) -> dict:
+    recent = submissions["filings"]["recent"]
+    candidates = []
+    for i, form in enumerate(recent["form"]):
+        if form in ("10-Q", "10-K"):
+            candidates.append(
+                {
+                    "form": form,
+                    "filingDate": recent["filingDate"][i],
+                    "reportDate": recent["reportDate"][i],
+                    "accessionNumber": recent["accessionNumber"][i],
+                    "primaryDocument": recent["primaryDocument"][i],
+                }
+            )
+
+    if not candidates:
+        raise ValueError("No 10-Q or 10-K filings found in submissions")
+
+    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
+    return candidates[0]

@@ -54,3 +54,68 @@ def test_get_submissions_builds_padded_cik_url(mock_get):
     assert result == {"name": "Snowflake Inc."}
     called_url = mock_get.call_args.args[0]
     assert called_url == "https://data.sec.gov/submissions/CIK0001640147.json"
+
+
+from agents.sec_edgar import find_latest_10q_or_10k
+
+
+SUBMISSIONS_FIXTURE = {
+    "filings": {
+        "recent": {
+            "form": ["144", "10-Q", "4", "8-K", "10-K", "10-Q"],
+            "filingDate": [
+                "2026-09-04",
+                "2026-09-04",
+                "2026-09-03",
+                "2026-09-02",
+                "2025-03-01",
+                "2026-06-05",
+            ],
+            "reportDate": ["", "2026-07-31", "2026-09-01", "2026-09-02", "2024-12-31", "2026-04-30"],
+            "accessionNumber": [
+                "0001973251-26-000034",
+                "0001640147-26-000037",
+                "0001979088-26-000018",
+                "0001640147-26-000033",
+                "0001640147-25-000010",
+                "0001640147-26-000020",
+            ],
+            "items": ["", "", "", "2.02,9.01", "", ""],
+            "primaryDocument": [
+                "xsl144X01/primary_doc.xml",
+                "snow-20260731.htm",
+                "xslF345X06/wk-form4.xml",
+                "snow-20260902.htm",
+                "snow-20241231.htm",
+                "snow-20260430.htm",
+            ],
+        }
+    }
+}
+
+
+def test_find_latest_10q_or_10k_picks_most_recent_by_date():
+    result = find_latest_10q_or_10k(SUBMISSIONS_FIXTURE)
+
+    assert result["form"] == "10-Q"
+    assert result["filingDate"] == "2026-09-04"
+    assert result["reportDate"] == "2026-07-31"
+    assert result["accessionNumber"] == "0001640147-26-000037"
+    assert result["primaryDocument"] == "snow-20260731.htm"
+
+
+def test_find_latest_10q_or_10k_raises_when_none_found():
+    empty_fixture = {
+        "filings": {
+            "recent": {
+                "form": ["144"],
+                "filingDate": ["2026-09-04"],
+                "reportDate": [""],
+                "accessionNumber": ["0001973251-26-000034"],
+                "items": [""],
+                "primaryDocument": ["xsl144X01/primary_doc.xml"],
+            }
+        }
+    }
+    with pytest.raises(ValueError, match="No 10-Q or 10-K"):
+        find_latest_10q_or_10k(empty_fixture)
