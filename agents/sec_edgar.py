@@ -32,7 +32,7 @@ def get_submissions(cik: int, user_agent: str) -> dict:
     return response.json()
 
 
-def find_latest_10q_or_10k(submissions: dict) -> dict:
+def _collect_10q_10k_candidates(submissions: dict) -> list[dict]:
     recent = submissions["filings"]["recent"]
     candidates = []
     for i, form in enumerate(recent["form"]):
@@ -47,11 +47,27 @@ def find_latest_10q_or_10k(submissions: dict) -> dict:
                 }
             )
 
+    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
+    return candidates
+
+
+def find_latest_10q_or_10k(submissions: dict) -> dict:
+    candidates = _collect_10q_10k_candidates(submissions)
+
     if not candidates:
         raise ValueError("No 10-Q or 10-K filings found in submissions")
 
-    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
     return candidates[0]
+
+
+def find_prior_10q_or_10k(submissions: dict, exclude_accession: str | None = None) -> dict | None:
+    candidates = _collect_10q_10k_candidates(submissions)
+    remaining = [c for c in candidates if c["accessionNumber"] != exclude_accession]
+
+    if not remaining:
+        return None
+
+    return remaining[0]
 
 
 def find_latest_8k_item202(submissions: dict) -> dict | None:

@@ -231,3 +231,36 @@ def test_download_document_builds_correct_url(mock_get):
     assert called_url == (
         "https://www.sec.gov/Archives/edgar/data/1640147/000164014726000033/snow-20260902.htm"
     )
+
+
+from agents.sec_edgar import find_prior_10q_or_10k
+
+
+def test_find_prior_10q_or_10k_excludes_given_accession():
+    result = find_prior_10q_or_10k(SUBMISSIONS_FIXTURE, exclude_accession="0001640147-26-000037")
+
+    assert result["form"] == "10-Q"
+    assert result["filingDate"] == "2026-06-05"
+    assert result["accessionNumber"] == "0001640147-26-000020"
+
+
+def test_find_prior_10q_or_10k_returns_none_when_only_excluded_one_exists():
+    fixture = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q"],
+                "filingDate": ["2026-09-04"],
+                "reportDate": ["2026-07-31"],
+                "accessionNumber": ["0001640147-26-000037"],
+                "items": [""],
+                "primaryDocument": ["snow-20260731.htm"],
+            }
+        }
+    }
+    assert find_prior_10q_or_10k(fixture, exclude_accession="0001640147-26-000037") is None
+
+
+def test_find_prior_10q_or_10k_with_no_exclusion_returns_latest():
+    result = find_prior_10q_or_10k(SUBMISSIONS_FIXTURE)
+
+    assert result["accessionNumber"] == "0001640147-26-000037"
