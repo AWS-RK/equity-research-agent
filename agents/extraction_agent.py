@@ -1,3 +1,4 @@
+import argparse
 import json
 from pathlib import Path
 
@@ -135,3 +136,30 @@ def run(
     output_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
     return result
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Extract structured financial and operating data for a ticker from M1's saved raw documents."
+    )
+    parser.add_argument("--ticker", required=True, help="Stock ticker, e.g. SNOW")
+    parser.add_argument("--data-dir", default="data", help="Base directory where M1 saved raw documents")
+    parser.add_argument(
+        "--extraction-model", default="claude-sonnet-5", help="Model for the main period-extraction calls"
+    )
+    parser.add_argument(
+        "--diff-model",
+        default="claude-haiku-4-5-20251001",
+        help="Model for the risk-factor/guidance language diff calls",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> None:
+    args = parse_args(argv)
+    result = run(args.ticker, args.data_dir, args.extraction_model, args.diff_model)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
