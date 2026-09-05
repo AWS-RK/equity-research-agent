@@ -70,7 +70,7 @@ def find_prior_10q_or_10k(submissions: dict, exclude_accession: str | None = Non
     return remaining[0]
 
 
-def find_latest_8k_item202(submissions: dict) -> dict | None:
+def _collect_8k_item202_candidates(submissions: dict) -> list[dict]:
     recent = submissions["filings"]["recent"]
     candidates = []
     for i, form in enumerate(recent["form"]):
@@ -86,11 +86,27 @@ def find_latest_8k_item202(submissions: dict) -> dict | None:
                 }
             )
 
+    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
+    return candidates
+
+
+def find_latest_8k_item202(submissions: dict) -> dict | None:
+    candidates = _collect_8k_item202_candidates(submissions)
+
     if not candidates:
         return None
 
-    candidates.sort(key=lambda c: c["filingDate"], reverse=True)
     return candidates[0]
+
+
+def find_prior_8k_item202(submissions: dict, exclude_accession: str | None = None) -> dict | None:
+    candidates = _collect_8k_item202_candidates(submissions)
+    remaining = [c for c in candidates if c["accessionNumber"] != exclude_accession]
+
+    if not remaining:
+        return None
+
+    return remaining[0]
 
 
 def find_exhibit_991_filename(index_html: str) -> str | None:

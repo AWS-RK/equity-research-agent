@@ -264,3 +264,37 @@ def test_find_prior_10q_or_10k_with_no_exclusion_returns_latest():
     result = find_prior_10q_or_10k(SUBMISSIONS_FIXTURE)
 
     assert result["accessionNumber"] == "0001640147-26-000037"
+
+
+from agents.sec_edgar import find_prior_8k_item202
+
+
+def test_find_prior_8k_item202_excludes_given_accession():
+    fixture = {
+        "filings": {
+            "recent": {
+                "form": ["8-K", "8-K"],
+                "filingDate": ["2026-09-02", "2026-06-01"],
+                "reportDate": ["2026-09-02", "2026-06-01"],
+                "accessionNumber": ["0001640147-26-000033", "0001640147-26-000019"],
+                "items": ["2.02,9.01", "2.02,9.01"],
+                "primaryDocument": ["snow-20260902.htm", "snow-20260601.htm"],
+            }
+        }
+    }
+
+    result = find_prior_8k_item202(fixture, exclude_accession="0001640147-26-000033")
+
+    assert result["accessionNumber"] == "0001640147-26-000019"
+
+
+def test_find_prior_8k_item202_returns_none_when_only_excluded_one_exists():
+    result = find_prior_8k_item202(SUBMISSIONS_FIXTURE, exclude_accession="0001640147-26-000033")
+
+    assert result is None
+
+
+def test_find_prior_8k_item202_with_no_exclusion_returns_latest():
+    result = find_prior_8k_item202(SUBMISSIONS_FIXTURE)
+
+    assert result["accessionNumber"] == "0001640147-26-000033"
