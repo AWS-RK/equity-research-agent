@@ -97,3 +97,59 @@ def test_extract_period_data_raises_when_no_tool_use_block(mock_anthropic_cls):
         assert False, "expected RuntimeError"
     except RuntimeError as exc:
         assert "tool_use" in str(exc)
+
+
+from agents.claude_extraction import diff_language
+
+
+FAKE_DIFF = {
+    "changes_summary": "Added a new risk factor about AI regulation.",
+    "material_change": True,
+}
+
+
+@patch("agents.claude_extraction.Anthropic")
+def test_diff_language_returns_tool_input(mock_anthropic_cls):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_tool_response(FAKE_DIFF)
+    mock_anthropic_cls.return_value = mock_client
+
+    result = diff_language("current text", "prior text", "risk factors")
+
+    assert result == FAKE_DIFF
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+    assert call_kwargs["tool_choice"] == {"type": "tool", "name": "record_language_diff"}
+    prompt_sent = call_kwargs["messages"][0]["content"]
+    assert "current text" in prompt_sent
+    assert "prior text" in prompt_sent
+    assert "risk factors" in prompt_sent
+
+
+@patch("agents.claude_extraction.Anthropic")
+def test_diff_language_uses_given_model(mock_anthropic_cls):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_tool_response(FAKE_DIFF)
+    mock_anthropic_cls.return_value = mock_client
+
+    diff_language("current", "prior", "guidance", model="claude-sonnet-5")
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["model"] == "claude-sonnet-5"
+
+
+@patch("agents.claude_extraction.Anthropic")
+def test_diff_language_raises_when_no_tool_use_block(mock_anthropic_cls):
+    mock_client = MagicMock()
+    text_block = MagicMock()
+    text_block.type = "text"
+    response = MagicMock()
+    response.content = [text_block]
+    mock_client.messages.create.return_value = response
+    mock_anthropic_cls.return_value = mock_client
+
+    try:
+        diff_language("current", "prior", "risk factors")
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "tool_use" in str(exc)

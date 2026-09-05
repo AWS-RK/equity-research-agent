@@ -140,3 +140,56 @@ def extract_period_data(docs: dict[str, str], model: str = "claude-sonnet-5") ->
             return block.input
 
     raise RuntimeError("Claude did not return a tool_use block for record_period_extraction")
+
+
+DIFF_TOOL = {
+    "name": "record_language_diff",
+    "description": "Record a summary of what changed between two versions of the same disclosure text.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "changes_summary": {"type": "string"},
+            "material_change": {"type": "boolean"},
+        },
+        "required": ["changes_summary", "material_change"],
+    },
+}
+
+DIFF_PROMPT_TEMPLATE = """Compare the CURRENT and PRIOR versions of this company's {field_label} \
+below and summarize what changed in a few bullet points. Judge whether the change is \
+material (a substantive addition, removal, or shift in tone/emphasis) or immaterial \
+(wording-only, no real change). If the two texts are identical or nearly so, say so \
+plainly and set material_change to false.
+
+=== CURRENT ===
+{current_text}
+
+=== PRIOR ===
+{prior_text}
+"""
+
+
+def diff_language(
+    current_text: str,
+    prior_text: str,
+    field_label: str,
+    model: str = "claude-haiku-4-5-20251001",
+) -> dict:
+    client = Anthropic()
+    prompt = DIFF_PROMPT_TEMPLATE.format(
+        field_label=field_label, current_text=current_text, prior_text=prior_text
+    )
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        tools=[DIFF_TOOL],
+        tool_choice={"type": "tool", "name": "record_language_diff"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    for block in response.content:
+        if block.type == "tool_use":
+            return block.input
+
+    raise RuntimeError("Claude did not return a tool_use block for record_language_diff")
