@@ -37,11 +37,15 @@ Ticker in
    - Forward guidance: next-quarter and next-year ranges, from both
      the press release and anything management adds verbally on the
      call (these can differ)
-   - SaaS metrics computed only where actually disclosed: billings
-     (revenue + change in deferred revenue), RPO, YoY growth by
-     segment. Anything NOT disclosed (e.g. many companies don't
-     report ARR/NRR directly) is flagged as unavailable, never
-     estimated.
+   - Sector-generic operating metrics, not a fixed SaaS catalog:
+     the agent reports whatever KPIs the company itself discloses
+     and names (GMV/take rate, DAU/MAU/ARPU, Gross Bookings, RPO/NRR,
+     same-store sales, units/ASP, etc.), never a predefined list.
+     Billings (revenue + change in deferred revenue) is the one
+     exception -- a deterministically computed field, attempted
+     whenever both periods' deferred-revenue balances were disclosed,
+     regardless of sector. Anything not disclosed is flagged as
+     unavailable, never estimated.
    - Diff risk factors and guidance language against the prior filing
    |
    v
@@ -116,10 +120,42 @@ freshness check).
 are later milestones. M1 succeeds when it reliably fetches and saves
 clean source documents for a given ticker with a working freshness check.
 
+## M2 scope: Extraction Agent
+
+**Input:** the raw documents M1 already saved to `data/{TICKER}/`.
+
+**Output:** `data/{TICKER}/extracted.json` -- structured financial and
+operating data for the current period and the prior period, computed
+billings (when the inputs are disclosed), and risk-factor/guidance
+language diffs between the two periods.
+
+**Approach:** LLM-based extraction (via the Anthropic API, using
+structured tool-use, not free-text JSON parsing) rather than rule-based
+parsing -- reconciling GAAP/non-GAAP figures, judging what operating
+metrics a company actually disclosed, and diffing free-text risk
+factors/guidance language all require reading comprehension that
+regex/table-position heuristics can't reliably provide across
+different companies' filing formats. The main period-extraction calls
+use Sonnet 5 (accuracy-critical, 100K+ token documents); the smaller
+risk-factor/guidance language-diff calls use Haiku 4.5 (lower-stakes,
+small input) -- tiered specifically to optimize cost without weakening
+the accuracy-critical calls.
+
+M2 also fetches and saves the prior quarter's 10-Q/10-K and 8-K
+Exhibit 99.1 (reusing M1's SEC EDGAR functions) -- needed both for the
+language diffs and because billings requires the prior period's own
+deferred-revenue balance, which a standalone 10-Q doesn't show (it
+only compares against fiscal-year-end, not quarter-over-quarter).
+
+Full design: `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`.
+
+**Not in scope for M2:** analysis, note generation, revenue consensus.
+Those are later milestones or explicitly deferred (see above).
+
 ## Environment
 
 ```bash
-pip install requests python-dotenv
+pip install -r requirements-dev.txt
 ```
 
 `.env` needs:
@@ -127,4 +163,5 @@ pip install requests python-dotenv
 SEC_USER_AGENT="Your Name your.email@example.com"
 API_NINJAS_KEY=
 ALPHA_VANTAGE_KEY=
+ANTHROPIC_API_KEY=
 ```
