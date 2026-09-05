@@ -90,12 +90,23 @@ data/{TICKER}/ (from M1)          agents/extraction_agent.py (orchestrator)
 - **`agents/claude_extraction.py`** (new) — wraps the Anthropic API using
   structured tool-use (forces a single tool call with `tool_choice`,
   avoiding free-text JSON parsing):
-  - `extract_period_data(docs: dict[str, str], model: str) -> dict` —
+  - `extract_period_data(docs: dict[str, str], model: str = "claude-sonnet-5") -> dict` —
     `docs` keys are `"filing"`, `"press_release"`, and optionally
     `"transcript"` (prior-period calls omit it). Same schema for both
-    current and prior periods (see below).
-  - `diff_language(current_text: str, prior_text: str, field_label: str, model: str) -> dict` —
+    current and prior periods (see below). Defaults to Sonnet 5: this is
+    the accuracy-critical call — a 100-150K-token document, GAAP/non-GAAP
+    reconciliation judgment, and open-ended KPI discovery all benefit
+    from the more capable model, and it's where nearly all of this
+    project's per-run token cost lives.
+  - `diff_language(current_text: str, prior_text: str, field_label: str, model: str = "claude-haiku-4-5-20251001") -> dict` —
     returns `{"changes_summary": str, "material_change": bool}`.
+    Defaults to Haiku 4.5: comparing two already-extracted text fields
+    and judging materiality is a small-input, lower-stakes task well
+    suited to the cheaper/faster model — decided with the user
+    specifically to optimize cost, since this call's own token volume
+    is already small regardless of model (the savings here are about
+    picking the right tier for the task, not about total dollars, which
+    are dominated by the extraction calls).
 
 - **`agents/derived_metrics.py`** (new, generically named — not
   `saas_metrics.py`) — `compute_billings(current: dict, prior: dict) -> dict | None`.
@@ -104,11 +115,11 @@ data/{TICKER}/ (from M1)          agents/extraction_agent.py (orchestrator)
   either deferred-revenue balance is missing — never estimates.
 
 - **`agents/extraction_agent.py`** (new) — CLI orchestrator, same shape
-  as `retrieval_agent.py`: `run(ticker, base_dir="data", model="claude-sonnet-5") -> dict`,
+  as `retrieval_agent.py`: `run(ticker, base_dir="data", extraction_model="claude-sonnet-5", diff_model="claude-haiku-4-5-20251001") -> dict`,
   `main()`/`parse_args()` for `python -m agents.extraction_agent --ticker SNOW
-  [--model claude-sonnet-5]`. Reads M1's already-saved current-period
-  files from disk (no re-download); fetches and saves only the new
-  prior-period documents.
+  [--extraction-model claude-sonnet-5] [--diff-model claude-haiku-4-5-20251001]`.
+  Reads M1's already-saved current-period files from disk (no
+  re-download); fetches and saves only the new prior-period documents.
 
 - **`agents/sec_edgar.py`** (modify) — add `find_prior_10q_or_10k(submissions, exclude_accession: str) -> dict | None`
   and `find_prior_8k_item202(submissions, exclude_accession: str) -> dict | None`.
