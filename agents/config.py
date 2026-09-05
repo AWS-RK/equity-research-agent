@@ -10,6 +10,7 @@ class Config:
     sec_user_agent: str
     api_ninjas_key: str
     alpha_vantage_key: str
+    anthropic_api_key: str
 
 
 def load_config() -> Config:
@@ -20,6 +21,7 @@ def load_config() -> Config:
     sec_user_agent = os.environ.get("SEC_USER_AGENT", "").strip()
     api_ninjas_key = os.environ.get("API_NINJAS_KEY", "").strip()
     alpha_vantage_key = os.environ.get("ALPHA_VANTAGE_KEY", "").strip()
+    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 
     missing = [
         name
@@ -27,6 +29,7 @@ def load_config() -> Config:
             ("SEC_USER_AGENT", sec_user_agent),
             ("API_NINJAS_KEY", api_ninjas_key),
             ("ALPHA_VANTAGE_KEY", alpha_vantage_key),
+            ("ANTHROPIC_API_KEY", anthropic_api_key),
         ]
         if not value
     ]
@@ -40,6 +43,7 @@ def load_config() -> Config:
         sec_user_agent=sec_user_agent,
         api_ninjas_key=api_ninjas_key,
         alpha_vantage_key=alpha_vantage_key,
+        anthropic_api_key=anthropic_api_key,
     )
 
 
