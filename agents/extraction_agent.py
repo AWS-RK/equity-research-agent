@@ -15,7 +15,6 @@ from agents.sec_edgar import (
     download_document,
 )
 from agents.html_text import strip_html_to_text
-from agents.claude_extraction import extract_period_data, diff_language
 from agents.derived_metrics import compute_billings
 
 
@@ -72,24 +71,18 @@ def _fetch_and_save_prior_exhibit(
     return strip_html_to_text(text)
 
 
-def run(
-    ticker: str,
-    base_dir: str = "data",
-    extraction_model: str = "claude-sonnet-5",
-    diff_model: str = "claude-haiku-4-5-20251001",
-) -> dict:
+def fetch_prior_period_documents(ticker: str, base_dir: str = "data") -> dict:
+    """Deterministic prep step: fetch and save the prior quarter's 10-Q/10-K and
+    8-K Exhibit 99.1 (if any) alongside M1's current-period documents in
+    data/{TICKER}/. Returns the saved file paths (or None where nothing was
+    found) so the caller knows what's available to read.
+
+    This does NOT do any extraction -- reading the documents (current and
+    prior) and producing the structured data for save_extracted_result() is
+    done by Claude directly in a session, not by this function.
+    """
     config = load_config()
     data_dir = get_data_dir(ticker, base_dir)
-
-    current_docs = {"filing": read_current_filing_text(data_dir, ticker)}
-    press_release_text = read_current_press_release_text(data_dir, ticker)
-    if press_release_text is not None:
-        current_docs["press_release"] = press_release_text
-    transcript_text = read_current_transcript_text(data_dir, ticker)
-    if transcript_text is not None:
-        current_docs["transcript"] = transcript_text
-
-    current_period = extract_period_data(current_docs, model=extraction_model)
 
     cik = get_cik_for_ticker(ticker, config.sec_user_agent)
     submissions = get_submissions(cik, config.sec_user_agent)
@@ -100,36 +93,45 @@ def run(
     prior_8k_exclude = current_8k["accessionNumber"] if current_8k is not None else None
     prior_8k = find_prior_8k_item202(submissions, prior_8k_exclude)
 
-    prior_period = None
-    billings = None
-    diffs = {"risk_factors": None, "guidance_language": None}
+    result = {"prior_filing_path": None, "prior_press_release_path": None}
 
     if prior_filing is not None:
-        prior_docs = {
-            "filing": _fetch_and_save_prior_filing(cik, prior_filing, ticker, data_dir, config.sec_user_agent)
-        }
+        _fetch_and_save_prior_filing(cik, prior_filing, ticker, data_dir, config.sec_user_agent)
+        result["prior_filing_path"] = str(
+            data_dir / f"{ticker.upper()}_{prior_filing['form']}_PRIOR_{prior_filing['filingDate']}.htm"
+        )
+
         if prior_8k is not None:
-            prior_press_release_text = _fetch_and_save_prior_exhibit(
-                cik, prior_8k, ticker, data_dir, config.sec_user_agent
-            )
-            if prior_press_release_text is not None:
-                prior_docs["press_release"] = prior_press_release_text
+            exhibit_text = _fetch_and_save_prior_exhibit(cik, prior_8k, ticker, data_dir, config.sec_user_agent)
+            if exhibit_text is not None:
+                result["prior_press_release_path"] = str(
+                    data_dir / f"{ticker.upper()}_8K_EX99.1_PRIOR_{prior_8k['filingDate']}.htm"
+                )
 
-        prior_period = extract_period_data(prior_docs, model=extraction_model)
-        billings = compute_billings(current_period, prior_period)
-        diffs["risk_factors"] = diff_language(
-            current_period["risk_factors_text"], prior_period["risk_factors_text"], "risk factors", model=diff_model
-        )
-        diffs["guidance_language"] = diff_language(
-            current_period["guidance_text"], prior_period["guidance_text"], "guidance", model=diff_model
-        )
+    return result
 
+
+def save_extracted_result(
+    ticker: str,
+    base_dir: str,
+    current_period: dict,
+    prior_period: dict | None = None,
+    diffs: dict | None = None,
+) -> dict:
+    """Deterministic finalize step: takes the structured current/prior period
+    data (already produced by Claude reading the documents directly) and the
+    risk-factor/guidance-language diff summaries, computes billings, assembles
+    the final shape, and writes data/{TICKER}/extracted.json.
+    """
+    data_dir = get_data_dir(ticker, base_dir)
+
+    billings = compute_billings(current_period, prior_period) if prior_period is not None else None
     result = {
         "ticker": ticker.upper(),
         "current_period": current_period,
         "prior_period": prior_period,
         "billings": billings,
-        "diffs": diffs,
+        "diffs": diffs if diffs is not None else {"risk_factors": None, "guidance_language": None},
     }
 
     output_path = data_dir / "extracted.json"
@@ -140,24 +142,21 @@ def run(
 
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Extract structured financial and operating data for a ticker from M1's saved raw documents."
+        description=(
+            "Prepare inputs for extraction: fetch and save the prior quarter's "
+            "10-Q/10-K and 8-K exhibit alongside M1's current-period documents. "
+            "Reading the documents and producing extracted.json is done by Claude "
+            "directly in a session, not by this script."
+        )
     )
     parser.add_argument("--ticker", required=True, help="Stock ticker, e.g. SNOW")
     parser.add_argument("--data-dir", default="data", help="Base directory where M1 saved raw documents")
-    parser.add_argument(
-        "--extraction-model", default="claude-sonnet-5", help="Model for the main period-extraction calls"
-    )
-    parser.add_argument(
-        "--diff-model",
-        default="claude-haiku-4-5-20251001",
-        help="Model for the risk-factor/guidance language diff calls",
-    )
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    result = run(args.ticker, args.data_dir, args.extraction_model, args.diff_model)
+    result = fetch_prior_period_documents(args.ticker, args.data_dir)
     print(json.dumps(result, indent=2))
 
 

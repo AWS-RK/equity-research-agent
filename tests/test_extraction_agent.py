@@ -1,9 +1,12 @@
 import json
+from unittest.mock import patch
 
 from agents.extraction_agent import (
     read_current_filing_text,
     read_current_press_release_text,
     read_current_transcript_text,
+    fetch_prior_period_documents,
+    save_extracted_result,
 )
 
 
@@ -68,11 +71,6 @@ def test_read_current_transcript_text_returns_none_when_no_file(tmp_path):
     assert read_current_transcript_text(tmp_path, "SNOW") is None
 
 
-from unittest.mock import patch
-
-from agents.extraction_agent import run
-
-
 SUBMISSIONS_FIXTURE = {
     "filings": {
         "recent": {
@@ -102,76 +100,89 @@ FIXTURE_INDEX_HTML = (
     '<td>EX-99.1</td></tr>'
 )
 
-CURRENT_EXTRACTION = {
-    "revenue": 1200.0,
-    "deferred_revenue_balance": 500.0,
-    "risk_factors_text": "No material changes.",
-    "guidance_text": "Next quarter revenue of $X-$Y million.",
-}
 
-PRIOR_EXTRACTION = {
-    "revenue": 900.0,
-    "deferred_revenue_balance": 400.0,
-    "risk_factors_text": "Prior risk factors text.",
-    "guidance_text": "Prior guidance text.",
-}
-
-DIFF_RESULT = {"changes_summary": "No changes.", "material_change": False}
-
-
-def test_run_produces_extracted_json(tmp_path, monkeypatch):
+def test_fetch_prior_period_documents_saves_prior_filing_and_exhibit(tmp_path, monkeypatch):
     monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
     monkeypatch.setenv("API_NINJAS_KEY", "test-ninjas-key")
     monkeypatch.setenv("ALPHA_VANTAGE_KEY", "test-av-key")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
-
-    data_dir = tmp_path / "SNOW"
-    data_dir.mkdir()
-    (data_dir / "SNOW_10-Q_2026-09-04.htm").write_text("<p>current filing</p>", encoding="utf-8")
-    (data_dir / "SNOW_8K_EX99.1_2026-09-02.htm").write_text("<p>current press release</p>", encoding="utf-8")
-    (data_dir / "SNOW_transcript_2026Q3.json").write_text(
-        '{"transcript": "call text"}', encoding="utf-8"
-    )
 
     with patch("agents.extraction_agent.get_cik_for_ticker", return_value=1640147), \
          patch("agents.extraction_agent.get_submissions", return_value=SUBMISSIONS_FIXTURE), \
          patch("agents.extraction_agent.get_filing_index_html", return_value=FIXTURE_INDEX_HTML), \
-         patch("agents.extraction_agent.download_document", return_value="<p>prior filing</p>") as mock_download, \
-         patch(
-             "agents.extraction_agent.extract_period_data",
-             side_effect=[CURRENT_EXTRACTION, PRIOR_EXTRACTION],
-         ) as mock_extract, \
-         patch("agents.extraction_agent.diff_language", return_value=DIFF_RESULT) as mock_diff:
+         patch("agents.extraction_agent.download_document", return_value="<p>prior document</p>") as mock_download:
 
-        result = run("SNOW", base_dir=str(tmp_path))
+        result = fetch_prior_period_documents("SNOW", base_dir=str(tmp_path))
+
+    assert mock_download.call_count == 2  # prior filing + prior exhibit
+
+    data_dir = tmp_path / "SNOW"
+    expected_filing_path = data_dir / "SNOW_10-Q_PRIOR_2026-06-05.htm"
+    expected_exhibit_path = data_dir / "SNOW_8K_EX99.1_PRIOR_2026-06-01.htm"
+
+    assert result["prior_filing_path"] == str(expected_filing_path)
+    assert result["prior_press_release_path"] == str(expected_exhibit_path)
+    assert expected_filing_path.exists()
+    assert expected_exhibit_path.exists()
+
+
+def test_fetch_prior_period_documents_returns_none_paths_when_no_prior_filing(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
+    monkeypatch.setenv("API_NINJAS_KEY", "test-ninjas-key")
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "test-av-key")
+
+    single_filing_fixture = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q"],
+                "filingDate": ["2026-09-04"],
+                "reportDate": ["2026-07-31"],
+                "accessionNumber": ["0001640147-26-000037"],
+                "items": [""],
+                "primaryDocument": ["snow-20260731.htm"],
+            }
+        }
+    }
+
+    with patch("agents.extraction_agent.get_cik_for_ticker", return_value=1640147), \
+         patch("agents.extraction_agent.get_submissions", return_value=single_filing_fixture):
+
+        result = fetch_prior_period_documents("SNOW", base_dir=str(tmp_path))
+
+    assert result == {"prior_filing_path": None, "prior_press_release_path": None}
+
+
+def test_save_extracted_result_computes_billings_and_writes_json(tmp_path):
+    current_period = {"revenue": 1200.0, "deferred_revenue_balance": 500.0}
+    prior_period = {"revenue": 900.0, "deferred_revenue_balance": 400.0}
+    diffs = {
+        "risk_factors": {"changes_summary": "No changes.", "material_change": False},
+        "guidance_language": {"changes_summary": "Raised the range.", "material_change": True},
+    }
+
+    result = save_extracted_result("SNOW", str(tmp_path), current_period, prior_period, diffs)
 
     assert result["ticker"] == "SNOW"
-    assert result["current_period"] == CURRENT_EXTRACTION
-    assert result["prior_period"] == PRIOR_EXTRACTION
+    assert result["current_period"] == current_period
+    assert result["prior_period"] == prior_period
     assert result["billings"] == {
         "revenue": 1200.0,
         "current_deferred_revenue": 500.0,
         "prior_deferred_revenue": 400.0,
         "value": 1300.0,
     }
-    assert result["diffs"]["risk_factors"] == DIFF_RESULT
-    assert result["diffs"]["guidance_language"] == DIFF_RESULT
+    assert result["diffs"] == diffs
 
-    assert mock_extract.call_count == 2
-    current_call_docs = mock_extract.call_args_list[0].args[0]
-    assert "transcript" in current_call_docs
-    prior_call_docs = mock_extract.call_args_list[1].args[0]
-    assert "transcript" not in prior_call_docs
-
-    assert mock_diff.call_count == 2
-    assert mock_download.call_count == 2  # prior filing + prior exhibit
-
-    output_path = data_dir / "extracted.json"
+    output_path = tmp_path / "SNOW" / "extracted.json"
     assert output_path.exists()
     saved = json.loads(output_path.read_text(encoding="utf-8"))
     assert saved == result
 
-    prior_filing_path = data_dir / "SNOW_10-Q_PRIOR_2026-06-05.htm"
-    assert prior_filing_path.exists()
-    prior_exhibit_path = data_dir / "SNOW_8K_EX99.1_PRIOR_2026-06-01.htm"
-    assert prior_exhibit_path.exists()
+
+def test_save_extracted_result_handles_no_prior_period(tmp_path):
+    current_period = {"revenue": 1200.0, "deferred_revenue_balance": 500.0}
+
+    result = save_extracted_result("SNOW", str(tmp_path), current_period)
+
+    assert result["prior_period"] is None
+    assert result["billings"] is None
+    assert result["diffs"] == {"risk_factors": None, "guidance_language": None}

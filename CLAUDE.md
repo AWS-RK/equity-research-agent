@@ -129,25 +129,33 @@ operating data for the current period and the prior period, computed
 billings (when the inputs are disclosed), and risk-factor/guidance
 language diffs between the two periods.
 
-**Approach:** LLM-based extraction (via the Anthropic API, using
-structured tool-use, not free-text JSON parsing) rather than rule-based
-parsing -- reconciling GAAP/non-GAAP figures, judging what operating
-metrics a company actually disclosed, and diffing free-text risk
-factors/guidance language all require reading comprehension that
-regex/table-position heuristics can't reliably provide across
-different companies' filing formats. The main period-extraction calls
-use Sonnet 5 (accuracy-critical, 100K+ token documents); the smaller
-risk-factor/guidance language-diff calls use Haiku 4.5 (lower-stakes,
-small input) -- tiered specifically to optimize cost without weakening
-the accuracy-critical calls.
+**Approach:** LLM-based extraction rather than rule-based parsing --
+reconciling GAAP/non-GAAP figures, judging what operating metrics a
+company actually disclosed, and diffing free-text risk factors/guidance
+language all require reading comprehension that regex/table-position
+heuristics can't reliably provide across different companies' filing
+formats. The reading-comprehension work (financials, sector-generic
+KPIs, guidance, risk-factor/guidance-language diffing) is done by
+Claude directly in a session -- not by a Python script calling the
+Anthropic API. That was the original design (see the superseded-note
+in the M2 design spec below), reversed after the user pointed out a
+separate `ANTHROPIC_API_KEY` bills separately from their existing
+Claude subscription; running the extraction inside a Claude Code
+session uses that subscription instead of incurring new per-run API
+cost, at the cost of the extraction step no longer being a fully
+standalone, non-interactively-runnable script.
 
-M2 also fetches and saves the prior quarter's 10-Q/10-K and 8-K
-Exhibit 99.1 (reusing M1's SEC EDGAR functions) -- needed both for the
-language diffs and because billings requires the prior period's own
-deferred-revenue balance, which a standalone 10-Q doesn't show (it
-only compares against fiscal-year-end, not quarter-over-quarter).
+`agents/extraction_agent.py` keeps only the deterministic halves as
+plain, tested Python: `fetch_prior_period_documents()` (fetch and save
+the prior quarter's 10-Q/10-K and 8-K Exhibit 99.1, reusing M1's SEC
+EDGAR functions -- needed both for the language diffs and because
+billings requires the prior period's own deferred-revenue balance,
+which a standalone 10-Q doesn't show) and `save_extracted_result()`
+(computes billings from the current/prior period dicts Claude
+produced, assembles the final shape, writes `extracted.json`).
 
-Full design: `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`.
+Full design: `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`
+(superseded on the LLM-calling mechanism -- see the note at its top).
 
 **Not in scope for M2:** analysis, note generation, revenue consensus.
 Those are later milestones or explicitly deferred (see above).
@@ -163,5 +171,8 @@ pip install -r requirements-dev.txt
 SEC_USER_AGENT="Your Name your.email@example.com"
 API_NINJAS_KEY=
 ALPHA_VANTAGE_KEY=
-ANTHROPIC_API_KEY=
 ```
+
+No `ANTHROPIC_API_KEY` -- M2's extraction step runs as part of a Claude
+Code session (billed under the existing Claude subscription), not as a
+standalone script calling the Anthropic API.

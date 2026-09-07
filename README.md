@@ -4,19 +4,21 @@ Given a stock ticker, this pipeline pulls the latest 10-Q/10-K, earnings
 press release (with non-GAAP reconciliation), earnings call transcript,
 and EPS consensus data, then produces a cited research note.
 
-Status: **M1 complete, M2 code-complete (not yet live-verified)** —
-retrieval agent pulls and saves raw source documents; extraction agent
-turns them into structured, cited financial and operating data
-(sector-generic, not SaaS-specific). All 55 tests pass against mocked
-APIs, but M2 has not yet been run against a real Anthropic API key —
-see "Usage (M2)" below before trusting its output on a real ticker.
+Status: **M1 complete, M2 code-complete** — retrieval agent pulls and
+saves raw source documents; extraction agent turns them into
+structured, cited financial and operating data (sector-generic, not
+SaaS-specific). All 51 tests pass. The deterministic parts (fetching
+the prior quarter's filing, computing billings, writing the output
+JSON) are a tested Python module; the reading-comprehension part
+(financials, KPI discovery, guidance/risk-factor diffing) is done by
+Claude directly in a session — see "Usage (M2)" below.
 
 ## Setup
 
 ```bash
 pip install -r requirements-dev.txt
 cp .env.example .env
-# then fill in .env with your API Ninjas, Alpha Vantage, and Anthropic keys
+# then fill in .env with your API Ninjas and Alpha Vantage keys
 # (SEC EDGAR needs no key, just a real name/email in SEC_USER_AGENT)
 ```
 
@@ -34,29 +36,31 @@ Saves raw source documents to `data/SNOW/` and prints a freshness report.
 
 ## Usage (M2)
 
-```bash
-python -m agents.extraction_agent --ticker SNOW
-```
+M2 is not a single command — it's a two-step, Claude-in-the-loop process,
+because the reading-comprehension work (financials, sector-generic KPI
+discovery, guidance and risk-factor diffing) is done by Claude directly
+in a session rather than by a script calling the Anthropic API. This
+avoids needing a separate `ANTHROPIC_API_KEY` billed outside your
+existing Claude subscription — the trade-off is that it isn't a fully
+standalone, non-interactively-runnable script.
 
-Requires `data/SNOW/` to already contain M1's output (run the retrieval
-agent first) and a real `ANTHROPIC_API_KEY` in `.env`. Saves
-`data/SNOW/extracted.json` (current-period and prior-period financial/
-operating data, computed billings, risk-factor and guidance-language
-diffs) and prints it. Also fetches and saves the prior quarter's
-10-Q/10-K and 8-K Exhibit 99.1 into `data/SNOW/` alongside M1's files
-(named with a `_PRIOR_` marker).
+1. **Prep (deterministic, scriptable):**
+   ```bash
+   python -m agents.extraction_agent --ticker SNOW
+   ```
+   Requires `data/SNOW/` to already contain M1's output (run the
+   retrieval agent first). Fetches and saves the prior quarter's
+   10-Q/10-K and 8-K Exhibit 99.1 into `data/SNOW/` alongside M1's files
+   (named with a `_PRIOR_` marker) and prints their paths.
 
-Costs real money per run (~$1-1.50 estimated — the main extraction
-calls read a 100K+ token filing on Sonnet 5). Override models with
-`--extraction-model` / `--diff-model` if needed.
-
-**Not yet live-verified**: this milestone's 55 tests all pass against a
-mocked Anthropic client, but the extraction logic itself has not been
-run against a real API key yet. Before relying on its output, run it
-once against a real ticker and sanity-check `extracted.json` — do the
-financial figures look right, do `disclosed_kpis` reflect metrics that
-company actually reports (not a generic list), is `billings` either a
-real computed number or `null` (never a guess)?
+2. **Extraction (Claude-in-the-loop):** ask Claude Code to read the
+   current- and prior-period documents in `data/SNOW/` and produce the
+   structured `current_period`/`prior_period` dicts and risk-factor/
+   guidance-language diffs per the schema in
+   `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`,
+   then call `agents.extraction_agent.save_extracted_result(ticker,
+   base_dir, current_period, prior_period, diffs)` to compute billings
+   and write `data/SNOW/extracted.json`.
 
 ## Data sources
 

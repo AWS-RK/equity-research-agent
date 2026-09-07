@@ -1,5 +1,21 @@
 # M2 Extraction Agent — Design Spec
 
+> **SUPERSEDED (2026-09-07):** everything below describes `extract_period_data`
+> and `diff_language` as calls to the Anthropic API via a Python `anthropic`
+> SDK wrapper (`agents/claude_extraction.py`), with a separate
+> `ANTHROPIC_API_KEY`. That module has been removed. After the user pointed
+> out this key bills separately from their existing Claude subscription, the
+> reading-comprehension work described here is instead done by Claude
+> directly in a session (no separate API key, no standalone script for that
+> part). The deterministic halves this spec describes --
+> fetching/saving the prior filing, computing billings, writing
+> `extracted.json` -- are unchanged and now live in
+> `agents/extraction_agent.py` as `fetch_prior_period_documents()` and
+> `save_extracted_result()`. The extraction/diff *schema* (the field names
+> and shapes below) is still the target shape for what Claude should
+> produce when doing the extraction directly -- only the calling mechanism
+> changed. See `CLAUDE.md`'s M2 scope section for the current summary.
+
 ## Goal
 
 Given the raw documents M1 already fetched and saved for a ticker

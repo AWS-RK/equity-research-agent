@@ -1,5 +1,18 @@
 # M2 Extraction Agent Implementation Plan
 
+> **SUPERSEDED (2026-09-07):** Tasks 6, 7, and part of 9/10 below built
+> `agents/claude_extraction.py` (an Anthropic API wrapper) and wired it into
+> `agents/extraction_agent.py`'s `run()`. That module has been deleted and
+> `run()` replaced with `fetch_prior_period_documents()` +
+> `save_extracted_result()` -- the reading-comprehension work now happens via
+> Claude directly in a session instead of a separate billed API key. Tasks
+> 1-5 and 8 (config scaffolding note aside -- Task 1's `ANTHROPIC_API_KEY`
+> addition was later reverted -- , html_text, derived_metrics, the two
+> sec_edgar prior-filing refactors, and the current-period file readers) are
+> still accurate as executed. See the superseded-note in
+> `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md` for the
+> full rationale.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Given a ticker whose raw documents M1 already saved to `data/{TICKER}/`, extract structured financial and operating data — generic across sectors, not SaaS-specific — into `data/{TICKER}/extracted.json`, using Claude (Sonnet 5) for the parts that require reading comprehension across a 100K+ token filing, and plain deterministic Python for the one part that's pure arithmetic (billings).
