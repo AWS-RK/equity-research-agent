@@ -4,14 +4,14 @@ Given a stock ticker, this pipeline pulls the latest 10-Q/10-K, earnings
 press release (with non-GAAP reconciliation), earnings call transcript,
 and EPS consensus data, then produces a cited research note.
 
-Status: **M1 complete, M2 code-complete** — retrieval agent pulls and
-saves raw source documents; extraction agent turns them into
-structured, cited financial and operating data (sector-generic, not
-SaaS-specific). All 51 tests pass. The deterministic parts (fetching
-the prior quarter's filing, computing billings, writing the output
-JSON) are a tested Python module; the reading-comprehension part
-(financials, KPI discovery, guidance/risk-factor diffing) is done by
-Claude directly in a session — see "Usage (M2)" below.
+Status: **M1 complete, M2 complete, M3 code-complete** — retrieval
+agent pulls and saves raw source documents; extraction agent turns
+them into structured, cited financial and operating data
+(sector-generic, not SaaS-specific); analysis agent drafts the final
+cited markdown note. All tests pass. As with M2, the deterministic
+parts of M3 (reading the two JSON inputs, saving the final note) are a
+tested Python module; the actual drafting is done by Claude directly
+in a session — see "Usage (M3)" below.
 
 ## Setup
 
@@ -61,6 +61,23 @@ standalone, non-interactively-runnable script.
    then call `agents.extraction_agent.save_extracted_result(ticker,
    base_dir, current_period, prior_period, diffs)` to compute billings
    and write `data/SNOW/extracted.json`.
+
+## Usage (M3)
+
+Like M2, this is a two-step, Claude-in-the-loop process — no CLI
+command runs the whole thing, because the drafting itself (thesis,
+benchmark comparisons, getting every citation right) is the work.
+
+1. **Prerequisite:** `data/SNOW/extracted.json` must already exist (run
+   M1 then M2 first).
+2. **Draft (Claude-in-the-loop):** ask Claude Code to read
+   `data/SNOW/extracted.json` and `data/SNOW/SNOW_earnings_alphavantage.json`
+   (via `agents.analysis_agent.read_extracted_data` and
+   `read_eps_consensus`), draft the note per the structure in
+   `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`
+   (thesis, three benchmarks, new guidance, notable changes, numbered
+   Sources), then call `agents.analysis_agent.save_note(ticker,
+   base_dir, markdown_text)` to write `data/SNOW/note.md`.
 
 ## Data sources
 

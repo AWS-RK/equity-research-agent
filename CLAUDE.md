@@ -49,7 +49,7 @@ Ticker in
    - Diff risk factors and guidance language against the prior filing
    |
    v
-[3. Analysis Agent]
+[3. Analysis Agent]  (produces the final output directly -- see below)
    - Draft the note: thesis, results vs. THREE benchmarks —
      (a) consensus estimates (EPS beat/miss vs. Street; revenue
          consensus explicitly marked unavailable in v0, no paid
@@ -59,11 +59,11 @@ Ticker in
      what moves the stock going forward, not just the trailing quarter
    - Every factual claim carries an inline citation to its exact
      source (filing section, or transcript speaker + quote)
-   |
-   v
-[4. Output]
-   - Single markdown file, non-GAAP-led, with a Sources section
-     listing every citation
+   - Output: a single markdown file, non-GAAP-led, with a Sources
+     section listing every citation (originally scoped as a separate
+     "M4 Output" stage; collapsed into this one once M3's architecture
+     had Claude draft the complete file directly -- there was no
+     separate assembly step left for M4 to own)
 ```
 
 ## Why these design choices (context for whoever builds this)
@@ -159,6 +159,33 @@ Full design: `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`
 
 **Not in scope for M2:** analysis, note generation, revenue consensus.
 Those are later milestones or explicitly deferred (see above).
+
+## M3 scope: Analysis Agent
+
+**Input:** M2's `data/{TICKER}/extracted.json` and M1's
+`data/{TICKER}/{TICKER}_earnings_alphavantage.json`.
+
+**Output:** `data/{TICKER}/note.md` -- a single cited markdown research
+note: thesis, results vs. three benchmarks, new forward guidance as its
+own section, notable risk-factor/guidance-language changes, and a
+numbered-footnote Sources section resolving every citation.
+
+**Approach:** same architecture as M2's pivot -- `agents/analysis_agent.py`
+is a thin, deterministic Python module (`read_extracted_data`,
+`read_eps_consensus`, `save_note`) with no orchestrating `run()`/CLI,
+because unlike M1/M2 there's no automatable pipeline step here. The
+drafting itself -- the thesis, matching prior guidance to actual
+results by metric name, getting every citation right -- is done by
+Claude directly in a session, not by a script. No new API key.
+
+No new computation is needed for the EPS-vs-Street benchmark: Alpha
+Vantage's `quarterlyEarnings` entries already include `surprise` and
+`surprisePercentage`, pre-computed by M1's data source.
+
+Full design: `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`.
+
+**Not in scope for M3:** multi-ticker comparison, charts, an Excel
+model. Revenue consensus stays unavailable (no free source identified).
 
 ## Known gaps / follow-ups
 
