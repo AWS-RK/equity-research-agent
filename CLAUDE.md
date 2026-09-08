@@ -160,6 +160,20 @@ Full design: `docs/superpowers/specs/2026-09-04-extraction-agent-m2-design.md`
 **Not in scope for M2:** analysis, note generation, revenue consensus.
 Those are later milestones or explicitly deferred (see above).
 
+## Known gaps / follow-ups
+
+- **Earnings call transcript retrieval.** API Ninjas' free tier does not
+  include the `earningstranscript` endpoint (confirmed live during M1:
+  it returns `{"error": "This endpoint is available to premium
+  subscribers only."}`). M1 saves that error as-is rather than
+  crashing, so M2 correctly reads "no transcript available" and flags
+  verbal/call-sourced guidance as unavailable rather than guessing.
+  Deferred, not fixed -- if this needs addressing later, options are:
+  (a) upgrade the API Ninjas plan (`agents/api_ninjas.py`'s
+  `get_transcript()` already calls the right endpoint, no code change
+  needed), (b) add a fetcher for a different transcript provider, or
+  (c) support a manually-pasted transcript as an extraction input.
+
 ## Environment
 
 ```bash
