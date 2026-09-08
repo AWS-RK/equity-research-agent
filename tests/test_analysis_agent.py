@@ -79,3 +79,24 @@ def test_read_eps_consensus_raises_when_file_missing(tmp_path):
         assert False, "expected FileNotFoundError"
     except FileNotFoundError as exc:
         assert "retrieval agent" in str(exc).lower()
+
+
+from agents.analysis_agent import save_note
+
+
+def test_save_note_writes_file_and_returns_path(tmp_path):
+    markdown_text = "# SNOW Q2 FY2027\n\nThesis goes here.\n"
+
+    result_path = save_note("SNOW", str(tmp_path), markdown_text)
+
+    assert result_path == tmp_path / "SNOW" / "note.md"
+    assert result_path.exists()
+    assert result_path.read_text(encoding="utf-8") == markdown_text
+
+
+def test_save_note_creates_data_dir_if_missing(tmp_path):
+    assert not (tmp_path / "SNOW").exists()
+
+    save_note("SNOW", str(tmp_path), "# Note\n")
+
+    assert (tmp_path / "SNOW" / "note.md").exists()

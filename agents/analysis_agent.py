@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from agents.alpha_vantage import get_latest_quarterly_earnings
+from agents.config import get_data_dir
 
 
 def read_extracted_data(ticker: str, base_dir: str = "data") -> dict:
@@ -22,3 +23,10 @@ def read_eps_consensus(ticker: str, base_dir: str = "data") -> dict | None:
         )
     earnings_response = json.loads(earnings_path.read_text(encoding="utf-8"))
     return get_latest_quarterly_earnings(earnings_response)
+
+
+def save_note(ticker: str, base_dir: str, markdown_text: str) -> Path:
+    data_dir = get_data_dir(ticker, base_dir)
+    note_path = data_dir / "note.md"
+    note_path.write_text(markdown_text, encoding="utf-8")
+    return note_path
