@@ -298,3 +298,64 @@ def test_find_prior_8k_item202_with_no_exclusion_returns_latest():
     result = find_prior_8k_item202(SUBMISSIONS_FIXTURE)
 
     assert result["accessionNumber"] == "0001640147-26-000033"
+
+
+from agents.sec_edgar import find_historical_8k_item202
+
+
+MULTI_8K_SUBMISSIONS_FIXTURE = {
+    "filings": {
+        "recent": {
+            "form": ["8-K", "8-K", "8-K", "8-K"],
+            "filingDate": ["2026-09-02", "2026-06-01", "2026-03-01", "2025-12-01"],
+            "reportDate": ["2026-09-02", "2026-06-01", "2026-03-01", "2025-12-01"],
+            "accessionNumber": [
+                "0001640147-26-000033",
+                "0001640147-26-000019",
+                "0001640147-26-000010",
+                "0001640147-25-000090",
+            ],
+            "items": ["2.02,9.01", "2.02,9.01", "2.02,9.01", "2.02,9.01"],
+            "primaryDocument": [
+                "snow-20260902.htm",
+                "snow-20260601.htm",
+                "snow-20260301.htm",
+                "snow-20251201.htm",
+            ],
+        }
+    }
+}
+
+
+def test_find_historical_8k_item202_excludes_given_accessions_and_limits_count():
+    result = find_historical_8k_item202(
+        MULTI_8K_SUBMISSIONS_FIXTURE,
+        exclude_accessions={"0001640147-26-000033", "0001640147-26-000019"},
+        count=1,
+    )
+
+    assert len(result) == 1
+    assert result[0]["accessionNumber"] == "0001640147-26-000010"
+
+
+def test_find_historical_8k_item202_returns_empty_list_when_none_remain():
+    result = find_historical_8k_item202(
+        MULTI_8K_SUBMISSIONS_FIXTURE,
+        exclude_accessions={
+            "0001640147-26-000033",
+            "0001640147-26-000019",
+            "0001640147-26-000010",
+            "0001640147-25-000090",
+        },
+    )
+
+    assert result == []
+
+
+def test_find_historical_8k_item202_with_no_exclusions_returns_latest_n():
+    result = find_historical_8k_item202(MULTI_8K_SUBMISSIONS_FIXTURE, count=2)
+
+    assert [c["accessionNumber"] for c in result] == [
+        "0001640147-26-000033",
+        "0001640147-26-000019",
+    ]

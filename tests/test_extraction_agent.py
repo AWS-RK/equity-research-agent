@@ -186,3 +186,53 @@ def test_save_extracted_result_handles_no_prior_period(tmp_path):
     assert result["prior_period"] is None
     assert result["billings"] is None
     assert result["diffs"] == {"risk_factors": None, "guidance_language": None}
+
+
+from agents.extraction_agent import fetch_historical_press_releases
+
+
+FOUR_8K_SUBMISSIONS_FIXTURE = {
+    "filings": {
+        "recent": {
+            "form": ["8-K", "8-K", "8-K", "8-K"],
+            "filingDate": ["2026-09-02", "2026-06-01", "2026-03-01", "2025-12-01"],
+            "reportDate": ["2026-09-02", "2026-06-01", "2026-03-01", "2025-12-01"],
+            "accessionNumber": [
+                "0001640147-26-000033",
+                "0001640147-26-000019",
+                "0001640147-26-000010",
+                "0001640147-25-000090",
+            ],
+            "items": ["2.02,9.01", "2.02,9.01", "2.02,9.01", "2.02,9.01"],
+            "primaryDocument": [
+                "snow-20260902.htm",
+                "snow-20260601.htm",
+                "snow-20260301.htm",
+                "snow-20251201.htm",
+            ],
+        }
+    }
+}
+
+
+def test_fetch_historical_press_releases_skips_current_and_prior_quarters(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
+    monkeypatch.setenv("API_NINJAS_KEY", "test-ninjas-key")
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "test-av-key")
+
+    with patch("agents.extraction_agent.get_cik_for_ticker", return_value=1640147), \
+         patch("agents.extraction_agent.get_submissions", return_value=FOUR_8K_SUBMISSIONS_FIXTURE), \
+         patch("agents.extraction_agent.get_filing_index_html", return_value=FIXTURE_INDEX_HTML), \
+         patch("agents.extraction_agent.download_document", return_value="<p>historical document</p>") as mock_download:
+
+        result = fetch_historical_press_releases("SNOW", base_dir=str(tmp_path), count=2)
+
+    assert mock_download.call_count == 2
+
+    data_dir = tmp_path / "SNOW"
+    assert result == [
+        {"filing_date": "2026-03-01", "path": str(data_dir / "SNOW_8K_EX99.1_HIST_2026-03-01.htm")},
+        {"filing_date": "2025-12-01", "path": str(data_dir / "SNOW_8K_EX99.1_HIST_2025-12-01.htm")},
+    ]
+    assert (data_dir / "SNOW_8K_EX99.1_HIST_2026-03-01.htm").read_text(encoding="utf-8") == "<p>historical document</p>"
+    assert (data_dir / "SNOW_8K_EX99.1_HIST_2025-12-01.htm").exists()

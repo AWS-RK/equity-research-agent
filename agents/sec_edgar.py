@@ -109,6 +109,15 @@ def find_prior_8k_item202(submissions: dict, exclude_accession: str | None = Non
     return remaining[0]
 
 
+def find_historical_8k_item202(
+    submissions: dict, exclude_accessions: set[str] | None = None, count: int = 6
+) -> list[dict]:
+    candidates = _collect_8k_item202_candidates(submissions)
+    exclude = exclude_accessions or set()
+    remaining = [c for c in candidates if c["accessionNumber"] not in exclude]
+    return remaining[:count]
+
+
 def find_exhibit_991_filename(index_html: str) -> str | None:
     rows = re.split(r"<tr", index_html, flags=re.IGNORECASE)
     for row in rows[1:]:

@@ -10,6 +10,7 @@ from agents.sec_edgar import (
     find_latest_8k_item202,
     find_prior_10q_or_10k,
     find_prior_8k_item202,
+    find_historical_8k_item202,
     get_filing_index_html,
     find_exhibit_991_filename,
     download_document,
@@ -109,6 +110,43 @@ def fetch_prior_period_documents(ticker: str, base_dir: str = "data") -> dict:
                 )
 
     return result
+
+
+def fetch_historical_press_releases(ticker: str, base_dir: str = "data", count: int = 6) -> list[dict]:
+    """Fetch and save the `count` most recent 8-K Item 2.02 press releases
+    further back than the current and prior quarters (which M1/M2 already
+    saved), for non-GAAP/KPI trend data that isn't available via SEC's XBRL
+    companyfacts API (agents/sec_xbrl.py covers GAAP historical trends
+    instead, at zero fetch cost). Returns the saved file paths and filing
+    dates; reading them for specific figures is done by Claude directly in
+    a session, same as the rest of this module.
+    """
+    config = load_config()
+    data_dir = get_data_dir(ticker, base_dir)
+
+    cik = get_cik_for_ticker(ticker, config.sec_user_agent)
+    submissions = get_submissions(cik, config.sec_user_agent)
+
+    current_8k = find_latest_8k_item202(submissions)
+    prior_8k = find_prior_8k_item202(
+        submissions, current_8k["accessionNumber"] if current_8k is not None else None
+    )
+    exclude = {c["accessionNumber"] for c in (current_8k, prior_8k) if c is not None}
+
+    historical_filings = find_historical_8k_item202(submissions, exclude_accessions=exclude, count=count)
+
+    results = []
+    for filing in historical_filings:
+        index_html = get_filing_index_html(cik, filing["accessionNumber"], config.sec_user_agent)
+        exhibit_filename = find_exhibit_991_filename(index_html)
+        if exhibit_filename is None:
+            continue
+        text = download_document(cik, filing["accessionNumber"], exhibit_filename, config.sec_user_agent)
+        path = data_dir / f"{ticker.upper()}_8K_EX99.1_HIST_{filing['filingDate']}.htm"
+        path.write_text(text, encoding="utf-8")
+        results.append({"filing_date": filing["filingDate"], "path": str(path)})
+
+    return results
 
 
 def save_extracted_result(
