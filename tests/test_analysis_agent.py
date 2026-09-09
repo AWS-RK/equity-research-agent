@@ -100,3 +100,39 @@ def test_save_note_creates_data_dir_if_missing(tmp_path):
     save_note("SNOW", str(tmp_path), "# Note\n")
 
     assert (tmp_path / "SNOW" / "note.md").exists()
+
+
+from agents.analysis_agent import generate_trend_charts
+
+
+HISTORY_FIXTURE = [
+    {
+        "quarter_label": "Q1 FY27",
+        "revenue": 1390.951,
+        "non_gaap_operating_margin_pct": 11.9,
+        "rpo_billions": 9.21,
+        "rpo_yoy_growth_pct": 38.0,
+        "eps_actual": 0.39,
+        "eps_estimate": 0.32,
+    },
+    {
+        "quarter_label": "Q2 FY27",
+        "revenue": 1546.793,
+        "non_gaap_operating_margin_pct": 15.3,
+        "rpo_billions": 9.00,
+        "rpo_yoy_growth_pct": 30.0,
+        "eps_actual": 0.62,
+        "eps_estimate": -0.51,
+    },
+]
+
+
+def test_generate_trend_charts_writes_four_pngs(tmp_path):
+    paths = generate_trend_charts("SNOW", str(tmp_path), HISTORY_FIXTURE)
+
+    assert len(paths) == 4
+    for path in paths:
+        assert path.exists()
+        assert path.suffix == ".png"
+        assert path.stat().st_size > 0
+        assert path.parent == tmp_path / "SNOW" / "charts"
