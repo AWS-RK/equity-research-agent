@@ -79,8 +79,13 @@ Ticker in
 - **Never estimate a metric that isn't disclosed.** If ARR or NRR
   isn't reported, say so. A confidently wrong number is worse than an
   honest gap.
-- **Stay lean in v0.** No charts, no Excel model, no multi-company
-  comparison yet. Ticker in, one cited markdown note out.
+- **Stay lean in v0.** No Excel model, no multi-company comparison,
+  no rating or price target (this project has no valuation model, and
+  a specific recommendation without one would be exactly the kind of
+  confidently-stated, unsupported claim the project exists to avoid).
+  Charts were originally deferred too, but the user asked for them
+  after M3 shipped -- see "M3.1: trend charts" below. Ticker in, one
+  cited markdown note out.
 
 ## Data sources (M1 specifically)
 
@@ -184,8 +189,60 @@ Vantage's `quarterlyEarnings` entries already include `surprise` and
 
 Full design: `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`.
 
-**Not in scope for M3:** multi-ticker comparison, charts, an Excel
-model. Revenue consensus stays unavailable (no free source identified).
+**Not in scope for M3:** multi-ticker comparison, an Excel model.
+Revenue consensus stays unavailable (no free source identified).
+
+## M3.1: trend charts and report format refinement
+
+After M3 shipped, the user asked for four changes to `note.md`: add
+trendline charts, move the risk-factors diff to the bottom of the
+note, follow the structural conventions of real sell-side research
+reports, and add an Investment Thesis section on the company's
+overarching trends. No rating or price target was added (see "Stay
+lean in v0" above).
+
+**Charts required historical data the pipeline didn't have.** M1/M2
+only carry the current and prior quarter. Two new deterministic,
+zero-LLM-cost or low-cost data sources were added:
+
+- **`agents/sec_xbrl.py`**: `get_company_facts()` and
+  `get_quarterly_metric_history()` pull multi-quarter GAAP figures
+  (revenue, gross profit, operating income, net income, diluted EPS)
+  directly from SEC's XBRL companyfacts API -- free, no LLM reading
+  required. Verified live against SNOW: 21 quarters of clean revenue
+  history back to 2019. This filer's 10-K doesn't separately tag a
+  standalone fiscal Q4, so Q4 figures are calculated as the annual
+  total less the sum of Q1-Q3 (arithmetic on two disclosed figures,
+  not an estimate) -- checked against the company's own headline
+  release figures for two historical Q4 periods and matched to within
+  rounding both times.
+- **`agents/sec_edgar.py`'s `find_historical_8k_item202()`** and
+  **`agents/extraction_agent.py`'s `fetch_historical_press_releases()`**
+  fetch press releases further back than the current/prior quarters,
+  for non-GAAP margin, RPO, and NRR trend data that isn't in XBRL
+  (non-GAAP figures aren't part of the standard GAAP taxonomy). Reading
+  these for the specific figures needed is done by Claude directly in
+  a session, same as M2/M3's other reading-comprehension work -- much
+  lighter than a full M2-style extraction per historical quarter, since
+  only a few headline numbers are needed, not the complete schema.
+
+**`agents/analysis_agent.py`'s `generate_trend_charts()`** renders the
+charts (matplotlib, a new real runtime dependency in `requirements.txt`)
+as PNGs under `data/{TICKER}/charts/`, embedded in `note.md` via
+relative markdown image links. The function only renders; it doesn't
+care whether a given metric's history came from XBRL, Claude reading
+press releases, or Alpha Vantage's saved data.
+
+**Report structure** now follows the sell-side convention of Rating
+(omitted here, see above) -> Executive Summary -> Investment Thesis ->
+Quarterly Update -> Financial Exhibits -> Catalysts/New Guidance ->
+Risk Factors -> Sources, researched via a web search on typical
+equity-research report structure rather than assumed. The Investment
+Thesis section synthesizes overarching trends across the data (for
+SNOW's first note: the AI-driven margin inflection, decelerating RPO
+against accelerating revenue, and the dependency/competitive tension
+of relying on third-party frontier AI models) rather than restating
+individual facts already covered elsewhere in the note.
 
 ## Known gaps / follow-ups
 

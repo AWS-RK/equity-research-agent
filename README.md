@@ -4,14 +4,17 @@ Given a stock ticker, this pipeline pulls the latest 10-Q/10-K, earnings
 press release (with non-GAAP reconciliation), earnings call transcript,
 and EPS consensus data, then produces a cited research note.
 
-Status: **M1 complete, M2 complete, M3 code-complete** — retrieval
-agent pulls and saves raw source documents; extraction agent turns
-them into structured, cited financial and operating data
+Status: **M1 complete, M2 complete, M3 complete with trend charts** —
+retrieval agent pulls and saves raw source documents; extraction agent
+turns them into structured, cited financial and operating data
 (sector-generic, not SaaS-specific); analysis agent drafts the final
-cited markdown note. All tests pass. As with M2, the deterministic
-parts of M3 (reading the two JSON inputs, saving the final note) are a
-tested Python module; the actual drafting is done by Claude directly
-in a session — see "Usage (M3)" below.
+cited markdown note, now with revenue/margin/RPO/EPS trend charts and
+a sell-side report structure (Executive Summary, Investment Thesis,
+Financial Exhibits, risk factors at the end). All tests pass. As with
+M2, the deterministic parts of M3 (reading inputs, fetching historical
+data, rendering charts, saving the note) are a tested Python module;
+the actual drafting is done by Claude directly in a session — see
+"Usage (M3)" below.
 
 ## Setup
 
@@ -64,20 +67,32 @@ standalone, non-interactively-runnable script.
 
 ## Usage (M3)
 
-Like M2, this is a two-step, Claude-in-the-loop process — no CLI
+Like M2, this is a multi-step, Claude-in-the-loop process — no CLI
 command runs the whole thing, because the drafting itself (thesis,
 benchmark comparisons, getting every citation right) is the work.
 
 1. **Prerequisite:** `data/SNOW/extracted.json` must already exist (run
    M1 then M2 first).
-2. **Draft (Claude-in-the-loop):** ask Claude Code to read
-   `data/SNOW/extracted.json` and `data/SNOW/SNOW_earnings_alphavantage.json`
-   (via `agents.analysis_agent.read_extracted_data` and
-   `read_eps_consensus`), draft the note per the structure in
-   `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`
-   (thesis, three benchmarks, new guidance, notable changes, numbered
-   Sources), then call `agents.analysis_agent.save_note(ticker,
-   base_dir, markdown_text)` to write `data/SNOW/note.md`.
+2. **Historical data for charts (deterministic, scriptable):** pull an
+   8-quarter GAAP trend via `agents.sec_xbrl.get_company_facts()` /
+   `get_quarterly_metric_history()` (free, no LLM reading needed), and
+   fetch older press releases for non-GAAP margin/RPO/NRR trend data via
+   `agents.extraction_agent.fetch_historical_press_releases(ticker,
+   count=6)`.
+3. **Draft (Claude-in-the-loop):** ask Claude Code to read
+   `data/SNOW/extracted.json`, `data/SNOW/SNOW_earnings_alphavantage.json`,
+   and the historical press releases, draft the note per the structure
+   in `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`
+   and CLAUDE.md's "M3.1: trend charts" section (Executive Summary,
+   Investment Thesis, benchmarks, Financial Exhibits, new guidance,
+   risk factors at the end, numbered Sources) — no rating or price
+   target, this project has no valuation model.
+4. **Charts:** call `agents.analysis_agent.generate_trend_charts(ticker,
+   base_dir, history)` to render revenue/margin/RPO/EPS PNGs under
+   `data/SNOW/charts/`, referenced from the note via relative markdown
+   image links.
+5. Call `agents.analysis_agent.save_note(ticker, base_dir,
+   markdown_text)` to write `data/SNOW/note.md`.
 
 ## Data sources
 
