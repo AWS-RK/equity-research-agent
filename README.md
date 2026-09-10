@@ -4,17 +4,19 @@ Given a stock ticker, this pipeline pulls the latest 10-Q/10-K, earnings
 press release (with non-GAAP reconciliation), earnings call transcript,
 and EPS consensus data, then produces a cited research note.
 
-Status: **M1 complete, M2 complete, M3 complete with trend charts** —
-retrieval agent pulls and saves raw source documents; extraction agent
-turns them into structured, cited financial and operating data
-(sector-generic, not SaaS-specific); analysis agent drafts the final
-cited markdown note, now with revenue/margin/RPO/EPS trend charts and
-a sell-side report structure (Executive Summary, Investment Thesis,
-Financial Exhibits, risk factors at the end). All tests pass. As with
-M2, the deterministic parts of M3 (reading inputs, fetching historical
-data, rendering charts, saving the note) are a tested Python module;
-the actual drafting is done by Claude directly in a session — see
-"Usage (M3)" below.
+Status: **M1 complete, M2 complete, M3 complete with trend charts and
+valuation** — retrieval agent pulls and saves raw source documents;
+extraction agent turns them into structured, cited financial and
+operating data (sector-generic, not SaaS-specific); analysis agent
+drafts the final cited markdown note, with revenue/margin/RPO/EPS
+trend charts, a sell-side report structure (Executive Summary,
+Investment Thesis, Financial Exhibits, Valuation, risk factors at the
+end), and a peer valuation comparison (EV/Revenue, Price/Sales,
+forward P/E) sourced from Alpha Vantage. All tests pass. As with M2,
+the deterministic parts of M3 (reading inputs, fetching historical and
+peer data, rendering charts, saving the note) are a tested Python
+module; the actual drafting is done by Claude directly in a session —
+see "Usage (M3)" below.
 
 ## Setup
 
@@ -79,19 +81,28 @@ benchmark comparisons, getting every citation right) is the work.
    fetch older press releases for non-GAAP margin/RPO/NRR trend data via
    `agents.extraction_agent.fetch_historical_press_releases(ticker,
    count=6)`.
-3. **Draft (Claude-in-the-loop):** ask Claude Code to read
+3. **Valuation data (deterministic, scriptable):** call
+   `agents.alpha_vantage.get_company_overview(ticker, api_key)` for the
+   ticker and each peer to get EV/Revenue, Price/Sales, forward and
+   trailing P/E, and the Street's consensus rating/target price. Mind
+   Alpha Vantage's free-tier cap of 25 requests per day across the
+   whole project, not just per minute.
+4. **Draft (Claude-in-the-loop):** ask Claude Code to read
    `data/SNOW/extracted.json`, `data/SNOW/SNOW_earnings_alphavantage.json`,
-   and the historical press releases, draft the note per the structure
-   in `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md`
-   and CLAUDE.md's "M3.1: trend charts" section (Executive Summary,
-   Investment Thesis, benchmarks, Financial Exhibits, new guidance,
-   risk factors at the end, numbered Sources) — no rating or price
-   target, this project has no valuation model.
-4. **Charts:** call `agents.analysis_agent.generate_trend_charts(ticker,
+   the historical press releases, and the overview data, draft the note
+   per the structure in
+   `docs/superpowers/specs/2026-09-07-analysis-agent-m3-design.md` and
+   CLAUDE.md's "M3.1" and "M3.2" sections (Executive Summary, Investment
+   Thesis, benchmarks, Financial Exhibits, Valuation, new guidance, risk
+   factors at the end, numbered Sources) — no rating or price target of
+   its own; the Valuation section reports the stock's trading multiples
+   and the Street's published consensus as sourced data, not a
+   recommendation.
+5. **Charts:** call `agents.analysis_agent.generate_trend_charts(ticker,
    base_dir, history)` to render revenue/margin/RPO/EPS PNGs under
    `data/SNOW/charts/`, referenced from the note via relative markdown
    image links.
-5. Call `agents.analysis_agent.save_note(ticker, base_dir,
+6. Call `agents.analysis_agent.save_note(ticker, base_dir,
    markdown_text)` to write `data/SNOW/note.md`.
 
 ## Data sources

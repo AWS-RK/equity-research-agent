@@ -244,6 +244,43 @@ against accelerating revenue, and the dependency/competitive tension
 of relying on third-party frontier AI models) rather than restating
 individual facts already covered elsewhere in the note.
 
+## M3.2: valuation section
+
+After M3.1, the user asked for a Valuation section: the stock's
+trading multiples (P/E or EV/Sales as appropriate) and a comparison to
+peer averages. This is descriptive, sourced market data (what multiple
+the stock trades at, what the Street's published consensus is), not a
+rating or recommendation of this note's own, so it doesn't conflict
+with the "no rating or price target" decision in M3.1.
+
+**`agents/alpha_vantage.py`'s `get_company_overview()`** calls Alpha
+Vantage's OVERVIEW endpoint, which returns pre-computed EV/Revenue,
+Price/Sales, forward and trailing P/E, market capitalization, TTM
+financials, and the Street's consensus analyst rating distribution and
+target price, for any ticker in one call. Confirmed live: SNOW's
+`TrailingPE` comes back "-" (GAAP TTM earnings near breakeven, so
+trailing P/E isn't meaningful), while `EVToRevenue` is well-defined --
+consistent with how high-growth, GAAP-breakeven software companies are
+usually valued, and the reason this note leads with EV/Revenue rather
+than P/E.
+
+**Peer set, chosen with the user:** Datadog (DDOG), MongoDB (MDB),
+Confluent (CFLT), Cloudflare (NET), Elastic (ESTC) -- the closest
+data-platform comparables to Snowflake's positioning, over a broader
+high-growth-SaaS alternative that would have included less comparable
+names (Palantir, Salesforce, Atlassian).
+
+**Alpha Vantage's free tier caps at 25 requests per day (confirmed via
+web search after live testing produced an inconsistent pattern of
+empty responses)**, not the per-minute limit that was initially
+suspected. CFLT, NET, and ESTC returned empty `{}` responses because
+the day's quota was reached partway through fetching five peers, not
+because those tickers lack coverage. Asked the user how to proceed:
+they chose to publish today's note with the two available peers
+(DDOG, MDB) rather than wait for the quota to reset, with the gap
+explicitly flagged in the note rather than silently omitted or
+papered over with three peers' worth of guessed figures.
+
 ## Known gaps / follow-ups
 
 - **Earnings call transcript retrieval.** API Ninjas' free tier does not
@@ -257,6 +294,16 @@ individual facts already covered elsewhere in the note.
   `get_transcript()` already calls the right endpoint, no code change
   needed), (b) add a fetcher for a different transcript provider, or
   (c) support a manually-pasted transcript as an extraction input.
+
+- **Incomplete valuation peer set.** CFLT, NET, and ESTC are part of
+  the intended peer set (see M3.2) but their Alpha Vantage OVERVIEW
+  data hasn't been fetched yet -- the day's 25-request quota was used
+  up on SNOW, DDOG, and MDB plus troubleshooting. To complete the
+  comparison: wait for the daily quota to reset, then run
+  `agents.alpha_vantage.get_company_overview()` for each of the three
+  remaining tickers and save to `data/SNOW/peers/{TICKER}_overview_alphavantage.json`,
+  then update the Valuation section's table and peer-average figures
+  in `data/SNOW/note.md` and its [13] source note.
 
 ## Environment
 
