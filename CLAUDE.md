@@ -295,15 +295,20 @@ papered over with three peers' worth of guessed figures.
   needed), (b) add a fetcher for a different transcript provider, or
   (c) support a manually-pasted transcript as an extraction input.
 
-- **Incomplete valuation peer set.** CFLT, NET, and ESTC are part of
-  the intended peer set (see M3.2) but their Alpha Vantage OVERVIEW
-  data hasn't been fetched yet -- the day's 25-request quota was used
-  up on SNOW, DDOG, and MDB plus troubleshooting. To complete the
-  comparison: wait for the daily quota to reset, then run
-  `agents.alpha_vantage.get_company_overview()` for each of the three
-  remaining tickers and save to `data/SNOW/peers/{TICKER}_overview_alphavantage.json`,
-  then update the Valuation section's table and peer-average figures
-  in `data/SNOW/note.md` and its [13] source note.
+- **Confluent (CFLT) missing from the valuation peer set.** NET and
+  ESTC were added on 2026-09-19 once the daily quota reset, bringing
+  the comparison to 4 of 5 intended peers (see M3.2 and the Valuation
+  section of `data/SNOW/note.md`). CFLT alone returned an empty
+  OVERVIEW response on two separate dates (2026-09-09 and 2026-09-19),
+  including once as the very first call of a session when NET and
+  ESTC succeeded immediately after it in the same run -- more
+  consistent with a genuine per-ticker data-coverage gap on Alpha
+  Vantage's side than with the quota that explained the original
+  three-peer gap. Not fully confirmed either way. To retry: run
+  `agents.alpha_vantage.get_company_overview("CFLT", api_key)` on a
+  fresh day; if it still returns `{}`, treat CFLT as unavailable from
+  this data source and either drop it from the peer set or find an
+  alternative source for its multiples.
 
 ## Environment
 
