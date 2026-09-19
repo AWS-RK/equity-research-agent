@@ -283,15 +283,39 @@ papered over with three peers' worth of guessed figures.
 
 ## Known gaps / follow-ups
 
-- **Earnings call transcript retrieval.** API Ninjas' free tier does not
-  include the `earningstranscript` endpoint (confirmed live during M1:
-  it returns `{"error": "This endpoint is available to premium
-  subscribers only."}`). M1 saves that error as-is rather than
-  crashing, so M2 correctly reads "no transcript available" and flags
-  verbal/call-sourced guidance as unavailable rather than guessing.
-  Deferred, not fixed -- if this needs addressing later, options are:
-  (a) upgrade the API Ninjas plan (`agents/api_ninjas.py`'s
-  `get_transcript()` already calls the right endpoint, no code change
+- **Earnings call transcript retrieval -- partially mitigated, not solved.**
+  API Ninjas' free tier does not include the `earningstranscript` endpoint
+  (confirmed live during M1: it returns `{"error": "This endpoint is
+  available to premium subscribers only."}`). M1 saves that error as-is
+  rather than crashing.
+
+  `agents/retrieval_agent.py`'s `run()` now tries a free fallback when API
+  Ninjas fails: Alpha Vantage's `EARNINGS_CALL_TRANSCRIPT` endpoint
+  (`agents/alpha_vantage.py`'s `get_earnings_call_transcript()`), which
+  works on the same key already used for `EARNINGS`/`OVERVIEW` and returns
+  properly speaker-attributed transcripts. Its `quarter` parameter keys on
+  the filer's own self-styled fiscal label (e.g. "2027Q2" for what the
+  company calls "Q2 FY2027"), not a calendar quarter -- confirmed live by
+  testing several labels against SNOW's actual press release titles.
+  `derive_fiscal_quarter_guess()` computes this label with a heuristic
+  tuned to January-fiscal-year-end filers (confirmed correct for SNOW);
+  it is not guaranteed for filers with a different fiscal year end, but a
+  wrong guess just returns no data, same as today, so trying it is free
+  and harmless.
+
+  **The real limit: Alpha Vantage's transcript data lags real filers by
+  roughly one to two quarters** (confirmed live: as of 2026-09-19, SNOW's
+  most recent available transcript was fiscal Q4 FY2026, reported
+  February 2026 -- nothing yet for Q1 or Q2 FY2027). So this fallback
+  will typically return nothing for the CURRENT quarter, the one this
+  project actually needs, though it may catch up by the time a later
+  quarter's note is drafted, and it already fills in verbal color for
+  older quarters if that's ever wanted. Confirmed the lag is
+  filer-specific, not universal, by checking MongoDB's data separately.
+
+  If the current quarter's transcript is still needed sooner than Alpha
+  Vantage catches up: (a) upgrade the API Ninjas plan
+  (`get_transcript()` already calls the right endpoint, no code change
   needed), (b) add a fetcher for a different transcript provider, or
   (c) support a manually-pasted transcript as an extraction input.
 
