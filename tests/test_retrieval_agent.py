@@ -3,7 +3,7 @@ from datetime import date
 
 import requests
 
-from agents.retrieval_agent import derive_year_quarter
+from agents.retrieval_agent import derive_year_quarter, derive_fiscal_quarter_guess
 
 
 def test_derive_year_quarter_q3_boundary():
@@ -16,6 +16,22 @@ def test_derive_year_quarter_q1():
 
 def test_derive_year_quarter_q4():
     assert derive_year_quarter(date(2025, 12, 31)) == (2025, 4)
+
+
+def test_derive_fiscal_quarter_guess_matches_snow_q2_fy2027():
+    # Confirmed live against Alpha Vantage: SNOW's own "Second Quarter of
+    # Fiscal 2027" press release covers the period ended July 31, 2026.
+    assert derive_fiscal_quarter_guess(date(2026, 7, 31)) == "2027Q2"
+
+
+def test_derive_fiscal_quarter_guess_matches_snow_q4_fy2026():
+    # Confirmed live: SNOW's "Fourth Quarter and Full-Year of Fiscal 2026"
+    # covers the period ended January 31, 2026.
+    assert derive_fiscal_quarter_guess(date(2026, 1, 31)) == "2026Q4"
+
+
+def test_derive_fiscal_quarter_guess_matches_snow_q1_fy2027():
+    assert derive_fiscal_quarter_guess(date(2026, 4, 30)) == "2027Q1"
 
 
 from unittest.mock import patch
@@ -99,11 +115,13 @@ def test_run_continues_when_transcript_endpoint_is_gated(tmp_path, monkeypatch):
          patch("agents.retrieval_agent.download_document", return_value="<html>doc</html>"), \
          patch("agents.retrieval_agent.get_filing_index_html", return_value=FIXTURE_INDEX_HTML), \
          patch("agents.retrieval_agent.get_transcript", side_effect=http_error), \
+         patch("agents.retrieval_agent.get_earnings_call_transcript", return_value={}) as mock_fallback, \
          patch("agents.retrieval_agent.get_earnings", return_value=FIXTURE_EARNINGS) as mock_earnings:
 
         freshness_report = run("SNOW", base_dir=str(tmp_path), max_age_days=95)
 
     mock_earnings.assert_called_once_with("SNOW", "test-av-key")
+    mock_fallback.assert_called_once_with("SNOW", "test-av-key", "2027Q2")
 
     data_dir = tmp_path / "SNOW"
     transcript_path = data_dir / "SNOW_transcript_2026Q3.json"
@@ -114,3 +132,32 @@ def test_run_continues_when_transcript_endpoint_is_gated(tmp_path, monkeypatch):
     documents_reported = {entry["document"] for entry in freshness_report}
     assert transcript_path.name not in documents_reported
     assert "SNOW_earnings_alphavantage.json" in documents_reported
+
+
+def test_run_uses_alpha_vantage_fallback_when_it_has_the_transcript(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
+    monkeypatch.setenv("API_NINJAS_KEY", "test-ninjas-key")
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "test-av-key")
+
+    http_error = requests.exceptions.HTTPError("400 Client Error: Bad Request")
+    fallback_transcript = {
+        "symbol": "SNOW",
+        "quarter": "2027Q2",
+        "transcript": [{"speaker": "Sridhar Ramaswamy", "title": "CEO", "content": "Thanks, everyone."}],
+    }
+
+    with patch("agents.retrieval_agent.get_cik_for_ticker", return_value=1640147), \
+         patch("agents.retrieval_agent.get_submissions", return_value=FIXTURE_SUBMISSIONS), \
+         patch("agents.retrieval_agent.download_document", return_value="<html>doc</html>"), \
+         patch("agents.retrieval_agent.get_filing_index_html", return_value=FIXTURE_INDEX_HTML), \
+         patch("agents.retrieval_agent.get_transcript", side_effect=http_error), \
+         patch("agents.retrieval_agent.get_earnings_call_transcript", return_value=fallback_transcript), \
+         patch("agents.retrieval_agent.get_earnings", return_value=FIXTURE_EARNINGS):
+
+        run("SNOW", base_dir=str(tmp_path), max_age_days=95)
+
+    data_dir = tmp_path / "SNOW"
+    transcript_path = data_dir / "SNOW_transcript_2026Q3.json"
+    saved = json.loads(transcript_path.read_text(encoding="utf-8"))
+    assert "error" not in saved
+    assert saved == fallback_transcript

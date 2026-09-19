@@ -15,13 +15,28 @@ from agents.sec_edgar import (
     download_document,
 )
 from agents.api_ninjas import get_transcript
-from agents.alpha_vantage import get_earnings, get_latest_quarterly_earnings
+from agents.alpha_vantage import get_earnings, get_latest_quarterly_earnings, get_earnings_call_transcript
 from agents.freshness import check_freshness
 
 
 def derive_year_quarter(report_date: date) -> tuple[int, int]:
     quarter = (report_date.month - 1) // 3 + 1
     return report_date.year, quarter
+
+
+def derive_fiscal_quarter_guess(report_date: date) -> str:
+    """Best-effort guess at a January-fiscal-year-end filer's own self-styled
+    fiscal year/quarter label (e.g. "2027Q2"), for Alpha Vantage's
+    EARNINGS_CALL_TRANSCRIPT endpoint, which keys on that label rather than a
+    calendar quarter -- confirmed live for SNOW (fiscal year ends Jan 31).
+    NOT guaranteed correct for filers with a different fiscal year end; a
+    wrong guess just returns no transcript data, the same as today's
+    unavailable state, so trying it is harmless.
+    """
+    calendar_year, calendar_quarter = derive_year_quarter(report_date)
+    if calendar_quarter == 1:
+        return f"{calendar_year}Q4"
+    return f"{calendar_year + 1}Q{calendar_quarter - 1}"
 
 
 def _parse_date(value: str) -> date:
@@ -70,6 +85,18 @@ def run(ticker: str, base_dir: str = "data", max_age_days: int = 95) -> list[dic
         # failure as-is rather than guessing at a transcript, and let every other
         # independent data source in this run still complete.
         transcript = {"error": str(exc)}
+        # Alpha Vantage's transcript endpoint is a free fallback we already have a
+        # key for, but its data lags real filers by roughly a quarter or two, so
+        # it frequently has nothing for the current quarter yet. Try it anyway --
+        # a miss just leaves the API Ninjas error in place, same as before.
+        try:
+            fallback = get_earnings_call_transcript(
+                ticker, config.alpha_vantage_key, derive_fiscal_quarter_guess(report_date)
+            )
+        except requests.exceptions.HTTPError:
+            fallback = {}
+        if fallback.get("transcript"):
+            transcript = fallback
     transcript_path = data_dir / f"{ticker.upper()}_transcript_{year}Q{quarter}.json"
     transcript_path.write_text(json.dumps(transcript, indent=2), encoding="utf-8")
     transcript_date_str = transcript.get("date")

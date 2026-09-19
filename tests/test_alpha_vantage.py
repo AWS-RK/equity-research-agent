@@ -1,6 +1,11 @@
 from unittest.mock import Mock, patch
 
-from agents.alpha_vantage import get_earnings, get_latest_quarterly_earnings, get_company_overview
+from agents.alpha_vantage import (
+    get_earnings,
+    get_latest_quarterly_earnings,
+    get_company_overview,
+    get_earnings_call_transcript,
+)
 
 
 EARNINGS_FIXTURE = {
@@ -80,3 +85,33 @@ def test_get_company_overview_calls_correct_endpoint(mock_get):
     called_params = mock_get.call_args.kwargs["params"]
     assert called_url == "https://www.alphavantage.co/query"
     assert called_params == {"function": "OVERVIEW", "symbol": "SNOW", "apikey": "test-api-key"}
+
+
+TRANSCRIPT_FIXTURE = {
+    "symbol": "SNOW",
+    "quarter": "2027Q2",
+    "transcript": [
+        {"speaker": "Sridhar Ramaswamy", "title": "Chief Executive Officer (CEO)", "content": "Thanks, everyone."},
+    ],
+}
+
+
+@patch("agents.alpha_vantage.requests.get")
+def test_get_earnings_call_transcript_calls_correct_endpoint(mock_get):
+    mock_response = Mock()
+    mock_response.json.return_value = TRANSCRIPT_FIXTURE
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    result = get_earnings_call_transcript("snow", "test-api-key", "2027Q2")
+
+    assert result == TRANSCRIPT_FIXTURE
+    called_url = mock_get.call_args.args[0]
+    called_params = mock_get.call_args.kwargs["params"]
+    assert called_url == "https://www.alphavantage.co/query"
+    assert called_params == {
+        "function": "EARNINGS_CALL_TRANSCRIPT",
+        "symbol": "SNOW",
+        "quarter": "2027Q2",
+        "apikey": "test-api-key",
+    }
