@@ -281,6 +281,28 @@ they chose to publish today's note with the two available peers
 explicitly flagged in the note rather than silently omitted or
 papered over with three peers' worth of guessed figures.
 
+## M3.3: press-release-led note, risk factors dropped
+
+The user pointed out two things that supersede parts of M3 and M3.1:
+risk-factor language is not part of an earnings note, and the 10-Q
+typically files days after results, so the note should rest largely on
+the earnings press release (8-K Exhibit 99.1, also on the company's IR
+portal) and prior quarters' releases.
+
+`note.md` therefore no longer has a Risk Factors section or a Notable
+Business Developments section (both were sourced only from the 10-Q),
+no longer cites the 10-Q anywhere, and the third Investment Thesis
+thread for SNOW was rebuilt from guidance (implied fourth-quarter
+product revenue from the raised full-year guide) instead of the 10-Q's
+AI-dependency risk language. Citations were renumbered to the eleven
+remaining sources, and a public copy of the note and charts lives in
+`samples/SNOW/`.
+
+Not changed: M1 still downloads the 10-Q and M2's extraction can still
+compute risk-factor diffs into `extracted.json`. The analysis step
+simply doesn't use them. If the 10-Q download and diffing are never
+wanted, removing them is a separate cleanup.
+
 ## Known gaps / follow-ups
 
 - **Earnings call transcript retrieval -- partially mitigated, not solved.**
